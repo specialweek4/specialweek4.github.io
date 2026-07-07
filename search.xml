@@ -4,6 +4,31 @@
   
     
     <entry>
+      <title>登录注册</title>
+      <link href="/2026/07/07/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%AD%A6%E4%B9%A0/%E7%99%BB%E5%BD%95%E6%B3%A8%E5%86%8C/"/>
+      <url>/2026/07/07/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%AD%A6%E4%B9%A0/%E7%99%BB%E5%BD%95%E6%B3%A8%E5%86%8C/</url>
+      
+        <content type="html"><![CDATA[<p>在知光APP中，采用 Spring Security + JWT 的双令牌机制，将短期的 accessToken 与长期的 refreshToken 分离：</p><ul><li>accessToken 负责高性能、无状态的接口访问认证</li><li>refreshToken 负责长期会话的续期与控制。</li></ul><p>这样既提升了账号安全性（缩小单次泄露的影响范围、支持强制下线与风控），又保证了用户的长期免登录体验，同时兼顾了分布式架构下的扩展性和会话管理能力。</p><h2 id="什么是双令牌"><a href="#什么是双令牌" class="headerlink" title="什么是双令牌"></a>什么是双令牌</h2><p>accessToken（访问令牌）</p><ul><li><p>作用：<br>每次访问业务接口时，用来证明“我是某某用户”。<br>比如你现在的 Authorization: Bearer xxx 就是 accessToken。</p></li><li><p>特点：</p><ul><li>有效期 很短（比如 15 分钟、30 分钟）。</li><li>内部自带用户 ID、角色、权限等信息（JWT 的 payload）。</li><li>后端 只需要校验签名和是否过期，一般不查数据库，性能好、扩展性强。</li></ul></li><li><p>使用方式：<br> 前端每次调 &#x2F;api&#x2F;v1&#x2F;xxx 时带上它用以权限认证。</p></li></ul><p>refreshToken（刷新令牌）</p><ul><li>作用：<br>不直接访问业务接口，只用来 换取新的 accessToken。<br>当前 accessToken 过期了，前端拿 refreshToken 调 &#x2F;auth&#x2F;refresh 这种接口，就能拿到一对新的 accessToken + refreshToken。</li><li>特点：<ul><li>有效期 较长（比如 7 天、14 天甚至 30 天）。</li><li>一般只在少数几个认证接口使用：&#x2F;login、&#x2F;refresh。</li><li>可以结合 Redis &#x2F; 数据库 做黑名单、版本号等控制（更容易做“踢下线”“注销”）。</li></ul></li></ul><p><span style="color:blue">为什么要用双令牌，而不是一个长有效期的 token？</span><p>（1）安全性更高<p>如果只有一个长生命周期的 JWT：</p><ul><li>比如你设一个 JWT 直接 30 天不过期，一旦这个 token 被窃取，黑客可以在 30 天内随便伪装成用户操作，风险非常大。</li><li>又因为 JWT 一般是“无状态”的，后端默认不会存储、也不回收，因此很难“立刻让这个 token 失效”。<br>双令牌的改进：</li><li>accessToken 只活 15~30 分钟 —— 即使被盗，黑客最多用这一小段时间。</li><li>refreshToken 一般只在“刷新接口”使用，你可以：<ul><li>把 refreshToken 保存得更安全（比如 HttpOnly Cookie、只在后端存一份、只允许 HTTPS）。</li><li>针对 refreshToken 做更严格检查：设备信息、IP、User-Agent、单点登录等。</li></ul></li><li>一旦发现泄露或用户手动“退出登录”，直接把对应的 refreshToken 在 Redis 标记失效：<ul><li>老的 refreshToken 无法再换新 token；</li><li>accessToken 也会因为短时过期，自然失效；</li><li>这样就实现“可控的强制下线”。</li></ul></li></ul><p>短命的 accessToken + 受控的 refreshToken，比一个长命 JWT 安全得多。</p><p>（2）提升用户体验（减少频繁登录）</p><p>（3）兼顾“无状态扩展性”和“可控的登录状态”</p><ul><li>accessToken 校验可以完全无状态（只靠签名+过期时间），非常适合分布式，集群部署：<ul><li>任意一个服务实例都能根据 JWT 自己完成认证。</li></ul></li><li>refreshToken 可以是 “轻状态” 的：<ul><li>把 refreshToken ID 存到 Redis；</li><li>可以做：<ul><li>单点登录（同一用户只允许一个刷新 token 生效）；</li><li>踢人下线（删除某个 refreshToken 记录）；</li><li>安全风控（记录设备、IP，异常则禁止刷新）。<br>这样就可以做到：</li></ul></li></ul></li><li>业务接口层（多服务）只管校验 accessToken，不查库，性能高；</li><li>认证中心 &#x2F; 网关 少量存 refreshToken 的状态，用来集中管理登录会话，引入“可控的在线状态”。</li></ul>]]></content>
+      
+      
+      <categories>
+          
+          <category> 知光 </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 知光 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
       <title>Redis实战篇-功能完善</title>
       <link href="/2026/07/02/Redis/Redis%E5%AE%9E%E6%88%98%E7%AF%87-%E5%8A%9F%E8%83%BD%E5%AE%8C%E5%96%84/"/>
       <url>/2026/07/02/Redis/Redis%E5%AE%9E%E6%88%98%E7%AF%87-%E5%8A%9F%E8%83%BD%E5%AE%8C%E5%96%84/</url>
@@ -30,12 +55,24 @@
     
     <entry>
       <title>2026-6-28小记</title>
-      <link href="/2026/06/28/2026-6-28%E5%B0%8F%E8%AE%B0/"/>
-      <url>/2026/06/28/2026-6-28%E5%B0%8F%E8%AE%B0/</url>
+      <link href="/2026/06/28/%E5%B0%8F%E8%AE%B0/2026%E5%B9%B46%E6%9C%88/2026-6-28%E5%B0%8F%E8%AE%B0/"/>
+      <url>/2026/06/28/%E5%B0%8F%E8%AE%B0/2026%E5%B9%B46%E6%9C%88/2026-6-28%E5%B0%8F%E8%AE%B0/</url>
       
-        <content type="html"><![CDATA[]]></content>
+        <content type="html"><![CDATA[<p>7月份就进入知光项目的学习，同时还有黑马点评项目的复习。</p>]]></content>
       
       
+      <categories>
+          
+          <category> 小记 </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 随手记 </tag>
+            
+        </tags>
       
     </entry>
     

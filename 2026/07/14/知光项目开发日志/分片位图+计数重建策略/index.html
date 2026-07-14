@@ -1,0 +1,360 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>分片位图+计数重建策略 | specialweek4博客</title><meta name="author" content="specialweek4"><meta name="copyright" content="specialweek4"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="这套系统本质上是在把“事实”与“计数”拆开：  位图专门记录每个用户的真实行为事实 SDS 专门承载最终计数 中间靠事件、聚合、批量刷写把两者连起来，从而在“强一致 + 高并发”与“低成本 + 可重建”之间找到平衡。  用分片位图牢牢抓住“谁对谁做了什么”的事实，用固定结构的 SDS 高效承载“现在统计结果是多少”，中间用“异步事件 + 聚合累加 + 批量刷写”作为桥梁，常态走最终一致，异常时再回">
+<meta property="og:type" content="article">
+<meta property="og:title" content="分片位图+计数重建策略">
+<meta property="og:url" content="https://specialweek4.github.io/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%88%86%E7%89%87%E4%BD%8D%E5%9B%BE+%E8%AE%A1%E6%95%B0%E9%87%8D%E5%BB%BA%E7%AD%96%E7%95%A5/index.html">
+<meta property="og:site_name" content="specialweek4博客">
+<meta property="og:description" content="这套系统本质上是在把“事实”与“计数”拆开：  位图专门记录每个用户的真实行为事实 SDS 专门承载最终计数 中间靠事件、聚合、批量刷写把两者连起来，从而在“强一致 + 高并发”与“低成本 + 可重建”之间找到平衡。  用分片位图牢牢抓住“谁对谁做了什么”的事实，用固定结构的 SDS 高效承载“现在统计结果是多少”，中间用“异步事件 + 聚合累加 + 批量刷写”作为桥梁，常态走最终一致，异常时再回">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://specialweek4.github.io/img/3.jpg">
+<meta property="article:published_time" content="2026-07-14T05:11:06.000Z">
+<meta property="article:modified_time" content="2026-07-14T15:26:16.737Z">
+<meta property="article:author" content="specialweek4">
+<meta property="article:tag" content="知光">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://specialweek4.github.io/img/3.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "分片位图+计数重建策略",
+  "url": "https://specialweek4.github.io/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%88%86%E7%89%87%E4%BD%8D%E5%9B%BE+%E8%AE%A1%E6%95%B0%E9%87%8D%E5%BB%BA%E7%AD%96%E7%95%A5/",
+  "image": "https://specialweek4.github.io/img/3.jpg",
+  "datePublished": "2026-07-14T05:11:06.000Z",
+  "dateModified": "2026-07-14T15:26:16.737Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "specialweek4",
+      "url": "https://specialweek4.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://specialweek4.github.io/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%88%86%E7%89%87%E4%BD%8D%E5%9B%BE+%E8%AE%A1%E6%95%B0%E9%87%8D%E5%BB%BA%E7%AD%96%E7%95%A5/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '分片位图+计数重建策略',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/./img/4.png);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/./img/1.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">37</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">12</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/./img/3.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">specialweek4博客</span></a><a class="nav-page-title" href="/"><span class="site-name">分片位图+计数重建策略</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">分片位图+计数重建策略</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-07-14T05:11:06.000Z" title="发表于 2026-07-14 13:11:06">2026-07-14</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-07-14T15:26:16.737Z" title="更新于 2026-07-14 23:26:16">2026-07-14</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E7%9F%A5%E5%85%89/">知光</a></span></div><div class="meta-secondline"></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>这套系统本质上是在把“事实”与“计数”拆开：</p>
+<ul>
+<li>位图专门记录每个用户的真实行为事实</li>
+<li>SDS 专门承载最终计数</li>
+<li>中间靠事件、聚合、批量刷写把两者连起来，从而在“强一致 + 高并发”与“低成本 + 可重建”之间找到平衡。</li>
+</ul>
+<p>用分片位图牢牢抓住“谁对谁做了什么”的事实，用固定结构的 SDS 高效承载“现在统计结果是多少”，中间用“异步事件 + 聚合累加 + 批量刷写”作为桥梁，常态走最终一致，异常时再回到事实层做强一致重建。</p>
+<h2 id="要解决的核心问题"><a href="#要解决的核心问题" class="headerlink" title="要解决的核心问题"></a>要解决的核心问题</h2><p>在内容平台里，每一次点赞、收藏、关注都是有价值的行为数据：</p>
+<ul>
+<li>前台要求：<ul>
+<li>点了赞，要立刻看到按钮状态变化 → 需要“是否点赞&#x2F;收藏”等事实毫秒级可读。</li>
+</ul>
+</li>
+<li>后台汇总要求：<ul>
+<li>“某篇知文总点赞数”“某作者总获赞&#x2F;收藏”等可以容忍秒级延迟，但必须稳定可扩展。</li>
+</ul>
+</li>
+<li>系统还必须能在异常或数据漂移时，从事实层可控地重建计数，避免影响其他关键业务。<br>所以设计思路是：</li>
+</ul>
+<p><code>事实层走强一致，汇总层走最终一致，异常时再反向依赖事实层重建。</code></p>
+<h2 id="分片位图：承载“用户态事实”"><a href="#分片位图：承载“用户态事实”" class="headerlink" title="分片位图：承载“用户态事实”"></a>分片位图：承载“用户态事实”</h2><p><code>1.键空间与分片策略</code></p>
+<p>位图键格式为：<code>bm:{metric}:{etype}:{eid}:{chunk}</code></p>
+<ul>
+<li>metric：行为指标（like、fav 等）</li>
+<li>etype：实体类型（article、video 等）</li>
+<li>eid：实体 ID</li>
+<li>chunk：分片编号</li>
+</ul>
+<p>用户 ID 通过映射规则 → (chunkId, bitOffset)，在对应位图分片中设置某一位 0&#x2F;1：</p>
+<ul>
+<li>点赞：该位设为 1</li>
+<li>取消赞：该位设为 0</li>
+<li>通过位图分片，把同一内容的用户状态拆在多个键上，避免单键超大 &amp; 热点冲突导致大量请求同时打在同一个 Key 上。</li>
+</ul>
+<p>分片大小需要权衡：</p>
+<ul>
+<li>片太大：键少但单键操作重、容易成为热点</li>
+<li>片太小：键多、管理成本高</li>
+<li>依据用户规模与 QPS 做选型，并可以按监控调整。</li>
+</ul>
+<p>BitmapShard.java  本方案中，位图分片为一个分片 32K</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 位图分片配置与帮助函数。</span></span><br><span class="line"><span class="comment"> * 采用固定分片大小，避免单键因用户ID偏移过大而膨胀。</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">class</span> <span class="title class_">BitmapShard</span> &#123;</span><br><span class="line">    <span class="comment">// 每个分片的位数（32K 位 =&gt; 4KB/分片）</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">int</span> <span class="variable">CHUNK_SIZE</span> <span class="operator">=</span> <span class="number">32_768</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="type">long</span> <span class="title function_">chunkOf</span><span class="params">(<span class="type">long</span> userId)</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> userId / CHUNK_SIZE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="type">long</span> <span class="title function_">bitOf</span><span class="params">(<span class="type">long</span> userId)</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> userId % CHUNK_SIZE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="title function_">BitmapShard</span><span class="params">()</span> &#123;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>同时通过以下映射规则来完成映射：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="type">long</span> <span class="title function_">chunkOf</span><span class="params">(<span class="type">long</span> userId)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> userId / CHUNK_SIZE;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="type">long</span> <span class="title function_">bitOf</span><span class="params">(<span class="type">long</span> userId)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> userId % CHUNK_SIZE;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>假设 CHUNK_SIZE &#x3D; 32768，现在要记录用户 userId &#x3D; 100000 的状态：</p>
+<ul>
+<li>chunkOf(100000) &#x3D; 100000 &#x2F; 32768 &#x3D; 3 （落在第 3 号分片）</li>
+<li>bitOf(100000) &#x3D; 100000 % 32768 &#x3D; 1696（分片内的第 1696 位）</li>
+</ul>
+<p>于是，我们只需要在 3 号分片的位图里，把第 1696 位设为 1 或 0，就能标记该用户的状态。</p>
+<p><code>2.为什么要分片？</code></p>
+<p>避免单键过大 &amp; 热点问题</p>
+<ul>
+<li>超大内容如果所有用户全在一个位图里，这个 key 会特别大，BITOP&#x2F;BITCOUNT 都很重；</li>
+<li>分片后：同一内容的读写压力被分摊到多个 key，单键不会“胖死”。</li>
+</ul>
+<p>方便并行统计 &amp; 重建</p>
+<ul>
+<li>统计总点赞数时，可以对多个分片并行执行 BITCOUNT 再汇总；</li>
+<li>出现异常需要重建计数时，也是“分片并行扫”，效率高很多。</li>
+</ul>
+<p>按需迁移&#x2F;清理更简单</p>
+<ul>
+<li>某些分片冷了，可以整体迁移到冷实例&#x2F;冷存储；<ul>
+<li>分片键名里直接包含了实体 ID (eid) 和行为 (metric)，天然形成了一种按实体和行为的热度管理能力。</li>
+<li>识别冷数据：对于一篇去年发布的文章 article:123，它的点赞、收藏位图分片可能已经很少被访问了。由于键名是 bm:like:article:123:0、bm:like:article:123:1…… 我们可以直接用前缀 bm:like:article:123:* 把它们全部扫描出来。</li>
+<li>整体搬运：确定这些分片“冷”了之后，就可以把它们批量迁移到冷 Redis 实例或带 SSD 存储的冷集群里。操作对象是一批精确的、固定 4KB 的小键，不会影响其他热数据。</li>
+<li>粒度灵活：甚至可以更细，比如发现用户 ID 在 0~32767 这个分片 (chunk:0) 整体都不活跃了，也可以单独迁移该分片。而如果是不分片的超大 Key，它内部夹杂着冷热用户，根本无法拆开迁移，只能整个 Key 一起搬，代价大得多。</li>
+</ul>
+</li>
+<li>删除内容时，只需要按前缀把相关分片删掉，不用在一个超大 key 里做复杂操作。<ul>
+<li>精准匹配，一键删除：当需要删除 article:123 时，它相关的所有数据（无论哪种行为）都可以用 bm:<em>:article:123:</em> 这个模式匹配到。在 Redis 里，你可以轻松地用 UNLINK 命令配合批量操作，把这些小键异步、非阻塞地删除掉。</li>
+<li>没有“大Key”包袱：如果不分片，一个文章的所有互动可能挤在一个巨大的 Key 里，比如 bm:like:article:123，这个 Key 可能高达数 MB。直接 DEL 它会导致 Redis 瞬间卡顿。分片后，你只是删除成百上千个 4KB 的小键，每个操作都轻量、安全，甚至可以在后台慢慢清理，对线上服务零冲击。</li>
+</ul>
+</li>
+</ul>
+<p>利于扩展与监控</p>
+<ul>
+<li>分片维度天然可以做：热点监控、QPS 统计、容量估算；</li>
+<li>将来用户量级上去，只需要增加分片数或调整映射规则，无需推倒重来。</li>
+</ul>
+<p><img src="/../../images/%E7%9F%A5%E5%85%89images/2.png" alt="alt text"><br><code>3. 写路径与读路径</code></p>
+<ul>
+<li>写路径：<ul>
+<li>通过原子位操作修改位图，天然满足幂等性（多次点赞只会置 1）。</li>
+<li>在高并发下依赖底层原子指令保证并发正确。</li>
+</ul>
+</li>
+<li>读路径：<ul>
+<li>isLiked(etype, eid, userId)：只需一次映射 + 一次位测试即可返回，满足前台毫秒级交互。</li>
+<li>日常统计不直接扫位图，位图主要用在：<ul>
+<li>前台“是否点赞&#x2F;收藏”等用户态判断</li>
+<li>异常或冷启动时的计数重建。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>位图不设短 TTL，作为事实层长期存在；删除内容&#x2F;用户时，由后台任务清理对应分片与索引。</p>
+<p>CounterServiceImpl.java</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="type">boolean</span> <span class="title function_">isLiked</span><span class="params">(String entityType, String entityId, <span class="type">long</span> userId)</span> &#123;</span><br><span class="line">    <span class="type">long</span> <span class="variable">chunk</span> <span class="operator">=</span> BitmapShard.chunkOf(userId);</span><br><span class="line">    <span class="type">long</span> <span class="variable">bit</span> <span class="operator">=</span> BitmapShard.bitOf(userId);</span><br><span class="line">    <span class="keyword">return</span> getBit(CounterKeys.bitmapKey(<span class="string">&quot;like&quot;</span>, entityType, entityId, chunk), bit);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="type">boolean</span> <span class="title function_">getBit</span><span class="params">(String key, <span class="type">long</span> offset)</span> &#123;</span><br><span class="line">    <span class="type">Boolean</span> <span class="variable">bit</span> <span class="operator">=</span> redis.execute((RedisCallback&lt;Boolean&gt;) connection -&gt;</span><br><span class="line">            connection.stringCommands().getBit(key.getBytes(StandardCharsets.UTF_8), offset));</span><br><span class="line">    <span class="keyword">return</span> Boolean.TRUE.equals(bit);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="事件-→-聚合桶-→-SDS：承载“最终计数”"><a href="#事件-→-聚合桶-→-SDS：承载“最终计数”" class="headerlink" title="事件 → 聚合桶 → SDS：承载“最终计数”"></a>事件 → 聚合桶 → SDS：承载“最终计数”</h2><p>具体操作详见：Kafka 异步写+写聚合</p>
+<h3 id="1-增量事件与聚合"><a href="#1-增量事件与聚合" class="headerlink" title="1.增量事件与聚合"></a>1.增量事件与聚合</h3><p>当用户行为落到位图后，同时产出一条增量事件：</p>
+<ul>
+<li>包含：实体信息（etype&#x2F;eid）、指标索引 idx、增量 delta（+1&#x2F;-1）、时间戳等。</li>
+<li>写入队列后，由消费者侧进行聚合：<br>聚合桶键：<br>agg:{schema}:{etype}:{eid}</li>
+<li>使用 Redis Hash 存储：<ul>
+<li>field &#x3D; idx（指标索引）</li>
+<li>value &#x3D; delta（增量累加）</li>
+</ul>
+</li>
+<li>Hash 操作是原子的，适合高并发下累加各类指标。</li>
+</ul>
+<h3 id="2-周期刷写与-SDS-结构"><a href="#2-周期刷写与-SDS-结构" class="headerlink" title="2.周期刷写与 SDS 结构"></a>2.周期刷写与 SDS 结构</h3><p>后台周期任务定时扫描活跃聚合桶：</p>
+<ol>
+<li>读取各指标增量</li>
+<li>通过 Lua 等原子脚本把增量折叠进计数快照 SDS</li>
+<li>删掉已处理的聚合字段，释放空间、防止重复折叠<br>SDS 采用固定结构：</li>
+</ol>
+<ul>
+<li>本质是一个固定长度的数组，每个指标 4 字节整型（大端编码）</li>
+<li>优点：<ul>
+<li>存储紧凑、结构固定，便于一次 GET&#x2F;SET 读写多指标</li>
+<li>更新可通过脚本实现单 key 原子更新，顺带做非负截断，防止负数计数出现<br>在常态下，所有“知文&#x2F;作者维度计数”都通过</li>
+</ul>
+</li>
+</ul>
+<p><code>事件 → 聚合桶 → 周期刷写 → SDS。这条链路稳定产出。</code></p>
+<h2 id="何时重建？如何防护？"><a href="#何时重建？如何防护？" class="headerlink" title="何时重建？如何防护？"></a>何时重建？如何防护？</h2><h3 id="知文维度触发条件"><a href="#知文维度触发条件" class="headerlink" title="知文维度触发条件"></a>知文维度触发条件</h3><p>在知文维度，当出现以下情况就要触发重建：</p>
+<ul>
+<li>SDS 缺失</li>
+<li>SDS 结构异常（长度不符、字段损坏）</li>
+<li>值异常（负数、明显越界）或检测到数据漂移</li>
+</ul>
+<p>重建时需保证：</p>
+<ul>
+<li>对同一 (etype, eid) 加 分布式锁&#x2F;单飞锁，防止并发重建</li>
+<li>清理对应的聚合字段，避免重建后老增量再次折叠导致重复计数</li>
+</ul>
+<h3 id="用户维度触发条件"><a href="#用户维度触发条件" class="headerlink" title="用户维度触发条件"></a>用户维度触发条件</h3><p>在作者&#x2F;用户维度，触发重建的场景包括：</p>
+<ul>
+<li>作者维度 SDS 缺失</li>
+<li>大规模关系&#x2F;内容变更后的强一致校验（如大版本迁移后的一次性校正）</li>
+</ul>
+<p>同样通过锁和单飞机制保证只有一个重建任务在进行。</p>
+<h2 id="两类重建流程"><a href="#两类重建流程" class="headerlink" title="两类重建流程"></a>两类重建流程</h2><h3 id="知文维度：从位图重算-like-fav"><a href="#知文维度：从位图重算-like-fav" class="headerlink" title="知文维度：从位图重算 like&#x2F;fav"></a>知文维度：从位图重算 like&#x2F;fav</h3><p>目标：恢复某内容的 like&#x2F;fav 等总数，数据来源全部在位图事实层各分片。<br>步骤概括：</p>
+<ol>
+<li>列出该内容某 metric（如 like）下的全部 bm:… 分片键</li>
+<li>对每个分片执行 BITCOUNT 统计 1 的数量</li>
+<li>汇总各分片计数得到总和</li>
+<li>通过原子脚本写入 SDS 对应指标位</li>
+<li>重建期间对 (etype, eid) 加锁，结束后清理旧聚合字段</li>
+</ol>
+<p>优化手段：</p>
+<ul>
+<li>分片并行计数（多线程&#x2F;多节点）</li>
+<li>对大量空洞用户区段使用稀疏扫描或“分片跳过索引”</li>
+<li>超热内容只在异常或冷启动时重建，常态下优先依赖聚合 + SDS。</li>
+</ul>
+<p><code>CounterServiceImpl</code>和源码有所不同，源码中我们在RedissonClient中配置了看门狗。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 获取实体计数汇总（SDS）。</span></span><br><span class="line"><span class="comment"> * 若缺失或结构异常则触发基于位图的事实重建，并清理对应聚合字段。</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> Map&lt;String, Long&gt; <span class="title function_">getCounts</span><span class="params">(String entityType, String entityId, List&lt;String&gt; metrics)</span> &#123;</span><br><span class="line">    <span class="type">String</span> <span class="variable">sdsKey</span> <span class="operator">=</span> CounterKeys.sdsKey(entityType, entityId);</span><br><span class="line">    <span class="type">int</span> <span class="variable">expectedLen</span> <span class="operator">=</span> CounterSchema.SCHEMA_LEN * CounterSchema.FIELD_SIZE;</span><br><span class="line">    <span class="comment">// SDS 固定结构：按大端 32 位编码</span></span><br><span class="line">    <span class="type">byte</span>[] raw = getRaw(sdsKey);</span><br><span class="line">    <span class="type">boolean</span> <span class="variable">needRebuild</span> <span class="operator">=</span> (raw == <span class="literal">null</span> || raw.length != expectedLen);</span><br><span class="line"></span><br><span class="line">    Map&lt;String, Long&gt; result = <span class="keyword">new</span> <span class="title class_">LinkedHashMap</span>&lt;&gt;();</span><br><span class="line">    <span class="keyword">if</span> (needRebuild) &#123;</span><br><span class="line">        <span class="comment">// 分布式锁避免并发重建：lock:sds-rebuild:&#123;etype&#125;:&#123;eid&#125;</span></span><br><span class="line">        <span class="type">String</span> <span class="variable">lockKey</span> <span class="operator">=</span> String.format(<span class="string">&quot;lock:sds-rebuild:%s:%s&quot;</span>, entityType, entityId); <span class="comment">// 防并发重建</span></span><br><span class="line">        <span class="type">String</span> <span class="variable">token</span> <span class="operator">=</span> UUID.randomUUID().toString();</span><br><span class="line">        <span class="type">boolean</span> <span class="variable">locked</span> <span class="operator">=</span> tryLock(lockKey, token, <span class="number">5000L</span>);</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">// 依据位图分片统计真实计数（管道批量 BITCOUNT）</span></span><br><span class="line">            <span class="type">byte</span>[] newSds = <span class="keyword">new</span> <span class="title class_">byte</span>[expectedLen];</span><br><span class="line">            List&lt;String&gt; rebuildFields = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">            </span><br><span class="line">            <span class="keyword">for</span> (String m : metrics) &#123;</span><br><span class="line">                <span class="type">Integer</span> <span class="variable">idx</span> <span class="operator">=</span> CounterSchema.NAME_TO_IDX.get(m);</span><br><span class="line">                <span class="keyword">if</span> (idx == <span class="literal">null</span>) <span class="keyword">continue</span>;</span><br><span class="line">                <span class="type">long</span> <span class="variable">sum</span> <span class="operator">=</span> bitCountShardsPipelined(m, entityType, entityId);</span><br><span class="line">                writeInt32BE(newSds, idx * CounterSchema.FIELD_SIZE, sum);</span><br><span class="line">                result.put(m, sum);</span><br><span class="line">                rebuildFields.add(String.valueOf(idx));</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="comment">// 仅在拿到锁时回写SDS并清理聚合桶，避免重复加算</span></span><br><span class="line">            <span class="keyword">if</span> (locked) &#123;</span><br><span class="line">                setRaw(sdsKey, newSds);</span><br><span class="line">                <span class="keyword">if</span> (!rebuildFields.isEmpty()) &#123;</span><br><span class="line">                    <span class="type">String</span> <span class="variable">aggKey</span> <span class="operator">=</span> CounterKeys.aggKey(entityType, entityId);</span><br><span class="line">                    <span class="comment">// 清理对应字段，杜绝重复折叠</span></span><br><span class="line">                    redis.opsForHash().delete(aggKey, rebuildFields.toArray());</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (locked) &#123;</span><br><span class="line">                unlock(lockKey, token); <span class="comment">// 仅持有者释放</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">for</span> (String m : metrics) &#123;</span><br><span class="line">            <span class="type">Integer</span> <span class="variable">idx</span> <span class="operator">=</span> CounterSchema.NAME_TO_IDX.get(m);</span><br><span class="line">            <span class="keyword">if</span> (idx == <span class="literal">null</span>) <span class="keyword">continue</span>;</span><br><span class="line">            <span class="type">int</span> <span class="variable">off</span> <span class="operator">=</span> idx * CounterSchema.FIELD_SIZE;</span><br><span class="line">            <span class="type">long</span> <span class="variable">val</span> <span class="operator">=</span> readInt32BE(raw, off); <span class="comment">// 大端读取单段 32 位值</span></span><br><span class="line">            result.put(m, val);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 尝试加分布式锁（SET NX EX），用于防并发重建。</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> key 锁键</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> token 持有者令牌</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> ttlMillis 锁 TTL（毫秒）</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">private</span> <span class="type">boolean</span> <span class="title function_">tryLock</span><span class="params">(String key, String token, <span class="type">long</span> ttlMillis)</span> &#123;</span><br><span class="line">    <span class="type">Boolean</span> <span class="variable">ok</span> <span class="operator">=</span> redis.execute((RedisCallback&lt;Boolean&gt;) connection -&gt;</span><br><span class="line">            connection.stringCommands().set(</span><br><span class="line">                    key.getBytes(StandardCharsets.UTF_8),</span><br><span class="line">                    token.getBytes(StandardCharsets.UTF_8),</span><br><span class="line">                    Expiration.milliseconds(ttlMillis),</span><br><span class="line">                    RedisStringCommands.SetOption.SET_IF_ABSENT</span><br><span class="line">            ));</span><br><span class="line">    <span class="keyword">return</span> Boolean.TRUE.equals(ok);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>tryLock的代码实现了一个基于 Redis 单实例的简单分布式锁，利用 SET key value NX PX ttl 命令的原子性来尝试获取锁。如key字段已存在说明已经有人占用了，token为锁的持有者标识（比如 UUID），用于后续释放锁时验证身份，防止误删别人的锁。</code></p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 基于位图分片进行管道化 BITCOUNT 汇总，用于按事实重建计数。</span></span><br><span class="line"><span class="comment"> * 说明：当前使用 KEYS 枚举分片（生产建议维护索引集合），结果按分片 BITCOUNT 求和。</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">private</span> <span class="type">long</span> <span class="title function_">bitCountShardsPipelined</span><span class="params">(String metric, String etype, String eid)</span> &#123;</span><br><span class="line">    <span class="type">String</span> <span class="variable">pattern</span> <span class="operator">=</span> String.format(<span class="string">&quot;bm:%s:%s:%s:*&quot;</span>, metric, etype, eid);</span><br><span class="line">    <span class="comment">// 生产环境建议以索引集合替代 KEYS</span></span><br><span class="line">    Set&lt;String&gt; keys = redis.keys(pattern); </span><br><span class="line">    <span class="keyword">if</span> (keys.isEmpty()) <span class="keyword">return</span> <span class="number">0L</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 管道批量 BITCOUNT 汇总</span></span><br><span class="line">    <span class="comment">// executePipelined 会打开一个管道连接。</span></span><br><span class="line">    List&lt;Object&gt; res = redis.executePipelined((RedisCallback&lt;Object&gt;) connection -&gt; &#123;</span><br><span class="line">        <span class="keyword">for</span> (String k : keys) &#123;</span><br><span class="line">          <span class="comment">//把 BITCOUNT key 命令写入输出缓冲区，并不读取返回值。因此在回调里调用这些命令时，不会等待 Redis 响应。</span></span><br><span class="line">            connection.stringCommands().bitCount(k.getBytes(StandardCharsets.UTF_8));</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//此处null只是为了满足接口的需求</span></span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;);</span><br><span class="line">    <span class="type">long</span> <span class="variable">sum</span> <span class="operator">=</span> <span class="number">0L</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (Object o : res) &#123;</span><br><span class="line">        <span class="keyword">if</span> (o <span class="keyword">instanceof</span> Number n) &#123;</span><br><span class="line">            sum += n.longValue();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> sum;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>bitCountShardsPipelined 借助 Redis 管道（pipeline） 将多次 BITCOUNT 命令合并为一次网络往返，从而大幅降低延迟。具体实现分解如下：</p>
+<ul>
+<li>正常执行：客户端发送一条命令 → 等待 Redis 响应 → 发送下一条。若对 100 个 key 做 BITCOUNT，需要 100 次网络往返。</li>
+<li><code>管道执行</code>：客户端将多条命令一次性打包发送给 Redis，Redis 顺次执行并将所有回复一次性发回。网络往返次数降为 1。</li>
+<li>所有的bitcount命令结果只能从 executePipelined自身返回的 List<Object> 中统一获取。</li>
+</ul>
+<h3 id="用户维度：从关系-内容计数重算"><a href="#用户维度：从关系-内容计数重算" class="headerlink" title="用户维度：从关系 + 内容计数重算"></a>用户维度：从关系 + 内容计数重算</h3><ul>
+<li>关注指标：<ul>
+<li>followings：用户关注了多少人</li>
+<li>followers：有多少人关注该用户</li>
+<li>posts：发布内容数量</li>
+<li>likedPosts：作者获赞总数</li>
+<li>favedPosts：作者被收藏总数</li>
+</ul>
+</li>
+<li>数据来源：<ul>
+<li>关系数据（关注&#x2F;粉丝表或缓存，过滤无效关系）</li>
+<li>内容发布数据（作者 → 内容 ID 列表）</li>
+<li>各内容的计数快照 SDS（批量读出，汇总 like&#x2F;fav）</li>
+</ul>
+</li>
+<li>算法步骤：<ul>
+<li>初始化用户 SDS 缓冲区，保留正常值，覆盖异常位</li>
+<li>写入 followings、followers</li>
+<li>获取作者内容 ID 列表，写入 posts</li>
+<li>批量读取这些内容的 SDS，累计 likedPosts&#x2F;favedPosts</li>
+<li>将完整的 SDS 一次性写回</li>
+</ul>
+</li>
+</ul>
+<p>RelationController.java</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 缺失或结构异常（少于 5 段 × 每段 4 字节）时尝试重建</span></span><br><span class="line"><span class="keyword">if</span> (raw == <span class="literal">null</span> || raw.length &lt; <span class="number">20</span>) &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        userCounterService.rebuildAllCounters(userId);</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception ignored) &#123;&#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 重建后二次读取</span></span><br><span class="line">    raw = redis.execute((RedisCallback&lt;<span class="type">byte</span>[]&gt;)</span><br><span class="line">            c -&gt; c.stringCommands().get((<span class="string">&quot;ucnt:&quot;</span> + userId).getBytes(StandardCharsets.UTF_8)));</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 仍失败则返回 0，保证接口可用性</span></span><br><span class="line">    <span class="keyword">if</span> (raw == <span class="literal">null</span> || raw.length &lt; <span class="number">20</span>) &#123;</span><br><span class="line">        m.put(<span class="string">&quot;followings&quot;</span>, <span class="number">0L</span>);</span><br><span class="line">        m.put(<span class="string">&quot;followers&quot;</span>, <span class="number">0L</span>);</span><br><span class="line">        m.put(<span class="string">&quot;posts&quot;</span>, <span class="number">0L</span>);</span><br><span class="line">        m.put(<span class="string">&quot;likedPosts&quot;</span>, <span class="number">0L</span>);</span><br><span class="line">        m.put(<span class="string">&quot;favedPosts&quot;</span>, <span class="number">0L</span>);</span><br><span class="line">        <span class="keyword">return</span> m;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>UserCounterServiceImpl.java</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/** 基于事实重建全部用户维度计数 */</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">rebuildAllCounters</span><span class="params">(<span class="type">long</span> userId)</span> &#123;</span><br><span class="line">    <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> UserCounterKeys.sdsKey(userId);</span><br><span class="line">    <span class="type">byte</span>[] raw = redis.execute((RedisCallback&lt;<span class="type">byte</span>[]&gt;) c -&gt; c.stringCommands().get(key.getBytes(StandardCharsets.UTF_8)));</span><br><span class="line">    <span class="type">int</span> <span class="variable">len</span> <span class="operator">=</span> <span class="number">5</span> * <span class="number">4</span>;</span><br><span class="line">    <span class="type">byte</span>[] buf = <span class="keyword">new</span> <span class="title class_">byte</span>[len];</span><br><span class="line">    <span class="keyword">if</span> (raw != <span class="literal">null</span> &amp;&amp; raw.length == len) &#123;</span><br><span class="line">        <span class="comment">// 保留已存在的值，按需覆盖</span></span><br><span class="line">        System.arraycopy(raw, <span class="number">0</span>, buf, <span class="number">0</span>, len);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 从数据库读取 关注数、粉丝数</span></span><br><span class="line">    <span class="type">long</span> <span class="variable">followings</span> <span class="operator">=</span> relationMapper.countFollowingActive(userId);</span><br><span class="line">    <span class="type">long</span> <span class="variable">followers</span> <span class="operator">=</span> relationMapper.countFollowerActive(userId);</span><br><span class="line"></span><br><span class="line">    <span class="type">long</span> posts;</span><br><span class="line">    List&lt;Long&gt; ids = knowPostMapper.listMyPublishedIds(userId);</span><br><span class="line">    <span class="keyword">if</span> (ids != <span class="literal">null</span> &amp;&amp; !ids.isEmpty()) &#123;</span><br><span class="line">        posts = ids.size();</span><br><span class="line">        <span class="type">long</span> <span class="variable">likeSum</span> <span class="operator">=</span> <span class="number">0L</span>;</span><br><span class="line">        <span class="type">long</span> <span class="variable">favSum</span> <span class="operator">=</span> <span class="number">0L</span>;</span><br><span class="line">        <span class="comment">// 聚合作者全部知文的获赞/获收藏总数</span></span><br><span class="line">        <span class="keyword">for</span> (Long id : ids) &#123;</span><br><span class="line">            Map&lt;String, Long&gt; v = counterService.getCounts(<span class="string">&quot;knowpost&quot;</span>, String.valueOf(id), List.of(<span class="string">&quot;like&quot;</span>, <span class="string">&quot;fav&quot;</span>));</span><br><span class="line">            likeSum += v.getOrDefault(<span class="string">&quot;like&quot;</span>, <span class="number">0L</span>);</span><br><span class="line">            favSum += v.getOrDefault(<span class="string">&quot;fav&quot;</span>, <span class="number">0L</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        write32be(buf, <span class="number">2</span> * <span class="number">4</span>, posts);</span><br><span class="line">        write32be(buf, <span class="number">3</span> * <span class="number">4</span>, likeSum);</span><br><span class="line">        write32be(buf, <span class="number">4</span> * <span class="number">4</span>, favSum);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        write32be(buf, <span class="number">2</span> * <span class="number">4</span>, <span class="number">0L</span>);</span><br><span class="line">        write32be(buf, <span class="number">3</span> * <span class="number">4</span>, <span class="number">0L</span>);</span><br><span class="line">        write32be(buf, <span class="number">4</span> * <span class="number">4</span>, <span class="number">0L</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    write32be(buf, <span class="number">0</span>, followings);</span><br><span class="line">    write32be(buf, <span class="number">4</span>, followers);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 回写用户计数 SDS</span></span><br><span class="line">    redis.execute((RedisCallback&lt;Void&gt;) c -&gt; &#123;</span><br><span class="line">        c.stringCommands().set(key.getBytes(StandardCharsets.UTF_8), buf);</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E7%9F%A5%E5%85%89/">知光</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/Kafka%E5%BC%82%E6%AD%A5%E5%86%99-%E5%86%99%E8%81%9A%E5%90%88/" title="Kafka异步写 + 写聚合"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Kafka异步写 + 写聚合</div></div><div class="info-2"><div class="info-item-1">方案背景：高并发行为计数的核心痛点在社交、电商等高频交互场景中，用户的点赞（like）、收藏（fav）、评论等行为会产生海量计数更新请求。 “同步直写最终计数”的方案在高并发下暴露诸多致命问题，成为系统性能瓶颈，具体可归纳为三大核心痛点： (一)写热点与写放大问题突出 1.高频细粒度写入引发热点压力：用户每一次行为操作都直接写入最终计数存储，形成高频次、细粒度的写请求。热门实体（如爆款帖子、大V）的计数键会成为“热点行”，集中占用存储节点的CPU、IO资源，导致响应延迟飙升。 问题本质：每一次用户行为（点赞、收藏）都转化为一条对存储的写命令，直接更新某个实体的总计数。比如用户给帖子 article:123 点赞，传统做法可能是执行 INCR like_count:article:123。当遇到爆款帖子或大V发布的内容时，同一时刻会有成千上万个用户同时点赞，所有的写请求都会涌向同一个计数键。这个键就成了“热点行”，存储节点（Redis 单线程、数据库行锁）的所有 CPU 和 IO 资源都被它抢占，其他请求的响应延迟就会飙升。 位图分片如何应对 分散键名：位图分片使用键 bm:lik...</div></div></div></a><a class="pagination-related" href="/2026/07/12/%E5%B0%8F%E8%AE%B0/2026%E5%B9%B47%E6%9C%88/2026-7-12%E5%B0%8F%E8%AE%B0/" title="2026-7-12小记"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">2026-7-12小记</div></div><div class="info-2"><div class="info-item-1">这几天完成了知光项目的项目配置，认证模块，对象存储模块和用户模块，还有用户资料修改模块。 今天骑车去了日月河去玩，有风，今天傍晚的光影特别的好，路上有很多出片的地方，可惜没有拍下来。和zy一块买了半个西瓜，吃的现在肚子疼。 </div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/Kafka%E5%BC%82%E6%AD%A5%E5%86%99-%E5%86%99%E8%81%9A%E5%90%88/" title="Kafka异步写 + 写聚合"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-14</div><div class="info-item-2">Kafka异步写 + 写聚合</div></div><div class="info-2"><div class="info-item-1">方案背景：高并发行为计数的核心痛点在社交、电商等高频交互场景中，用户的点赞（like）、收藏（fav）、评论等行为会产生海量计数更新请求。 “同步直写最终计数”的方案在高并发下暴露诸多致命问题，成为系统性能瓶颈，具体可归纳为三大核心痛点： (一)写热点与写放大问题突出 1.高频细粒度写入引发热点压力：用户每一次行为操作都直接写入最终计数存储，形成高频次、细粒度的写请求。热门实体（如爆款帖子、大V）的计数键会成为“热点行”，集中占用存储节点的CPU、IO资源，导致响应延迟飙升。 问题本质：每一次用户行为（点赞、收藏）都转化为一条对存储的写命令，直接更新某个实体的总计数。比如用户给帖子 article:123 点赞，传统做法可能是执行 INCR like_count:article:123。当遇到爆款帖子或大V发布的内容时，同一时刻会有成千上万个用户同时点赞，所有的写请求都会涌向同一个计数键。这个键就成了“热点行”，存储节点（Redis 单线程、数据库行锁）的所有 CPU 和 IO 资源都被它抢占，其他请求的响应延迟就会飙升。 位图分片如何应对 分散键名：位图分片使用键 bm:lik...</div></div></div></a><a class="pagination-related no-desc" href="/2026/07/11/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E7%9F%A5%E6%96%87/" title="知文"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-11</div><div class="info-item-2">知文</div></div></div></a><a class="pagination-related" href="/2026/07/10/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E9%A1%B9%E7%9B%AE%E9%85%8D%E7%BD%AE/" title="项目配置"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-10</div><div class="info-item-2">项目配置</div></div><div class="info-2"><div class="info-item-1">全局异常处理器GlobalExceptionHandler.java 123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081import jakarta.validation.ConstraintViolationException;import lombok.extern.slf4j.Slf4j;import com.tongji.common.exception.BusinessException;import com.tongji.common.exception.ErrorCode;import org.springframework.http.HttpStatus;import org.springframework.http.ResponseEntity;import org.springframework.valida...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/./img/1.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">specialweek4</div><div class="author-info-description">specialweek4的博客,记录我的学习和生活点滴</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">37</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">12</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/specialweek4"><i class="fab fa-github"></i><span>关注我</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/specialweek4" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:504957307@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%A6%81%E8%A7%A3%E5%86%B3%E7%9A%84%E6%A0%B8%E5%BF%83%E9%97%AE%E9%A2%98"><span class="toc-number">1.</span> <span class="toc-text">要解决的核心问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%86%E7%89%87%E4%BD%8D%E5%9B%BE%EF%BC%9A%E6%89%BF%E8%BD%BD%E2%80%9C%E7%94%A8%E6%88%B7%E6%80%81%E4%BA%8B%E5%AE%9E%E2%80%9D"><span class="toc-number">2.</span> <span class="toc-text">分片位图：承载“用户态事实”</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8B%E4%BB%B6-%E2%86%92-%E8%81%9A%E5%90%88%E6%A1%B6-%E2%86%92-SDS%EF%BC%9A%E6%89%BF%E8%BD%BD%E2%80%9C%E6%9C%80%E7%BB%88%E8%AE%A1%E6%95%B0%E2%80%9D"><span class="toc-number">3.</span> <span class="toc-text">事件 → 聚合桶 → SDS：承载“最终计数”</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%A2%9E%E9%87%8F%E4%BA%8B%E4%BB%B6%E4%B8%8E%E8%81%9A%E5%90%88"><span class="toc-number">3.1.</span> <span class="toc-text">1.增量事件与聚合</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%91%A8%E6%9C%9F%E5%88%B7%E5%86%99%E4%B8%8E-SDS-%E7%BB%93%E6%9E%84"><span class="toc-number">3.2.</span> <span class="toc-text">2.周期刷写与 SDS 结构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%95%E6%97%B6%E9%87%8D%E5%BB%BA%EF%BC%9F%E5%A6%82%E4%BD%95%E9%98%B2%E6%8A%A4%EF%BC%9F"><span class="toc-number">4.</span> <span class="toc-text">何时重建？如何防护？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9F%A5%E6%96%87%E7%BB%B4%E5%BA%A6%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6"><span class="toc-number">4.1.</span> <span class="toc-text">知文维度触发条件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%94%A8%E6%88%B7%E7%BB%B4%E5%BA%A6%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6"><span class="toc-number">4.2.</span> <span class="toc-text">用户维度触发条件</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%A4%E7%B1%BB%E9%87%8D%E5%BB%BA%E6%B5%81%E7%A8%8B"><span class="toc-number">5.</span> <span class="toc-text">两类重建流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9F%A5%E6%96%87%E7%BB%B4%E5%BA%A6%EF%BC%9A%E4%BB%8E%E4%BD%8D%E5%9B%BE%E9%87%8D%E7%AE%97-like-fav"><span class="toc-number">5.1.</span> <span class="toc-text">知文维度：从位图重算 like&#x2F;fav</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%94%A8%E6%88%B7%E7%BB%B4%E5%BA%A6%EF%BC%9A%E4%BB%8E%E5%85%B3%E7%B3%BB-%E5%86%85%E5%AE%B9%E8%AE%A1%E6%95%B0%E9%87%8D%E7%AE%97"><span class="toc-number">5.2.</span> <span class="toc-text">用户维度：从关系 + 内容计数重算</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%AE%9A%E5%88%B6%E5%8C%96Redis-SDS/" title="定制化Redis SDS"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="定制化Redis SDS"/></a><div class="content"><a class="title" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%AE%9A%E5%88%B6%E5%8C%96Redis-SDS/" title="定制化Redis SDS">定制化Redis SDS</a><time datetime="2026-07-14T09:08:58.000Z" title="发表于 2026-07-14 17:08:58">2026-07-14</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/Kafka%E5%BC%82%E6%AD%A5%E5%86%99-%E5%86%99%E8%81%9A%E5%90%88/" title="Kafka异步写 + 写聚合"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Kafka异步写 + 写聚合"/></a><div class="content"><a class="title" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/Kafka%E5%BC%82%E6%AD%A5%E5%86%99-%E5%86%99%E8%81%9A%E5%90%88/" title="Kafka异步写 + 写聚合">Kafka异步写 + 写聚合</a><time datetime="2026-07-14T06:11:26.000Z" title="发表于 2026-07-14 14:11:26">2026-07-14</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%88%86%E7%89%87%E4%BD%8D%E5%9B%BE+%E8%AE%A1%E6%95%B0%E9%87%8D%E5%BB%BA%E7%AD%96%E7%95%A5/" title="分片位图+计数重建策略"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="分片位图+计数重建策略"/></a><div class="content"><a class="title" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%88%86%E7%89%87%E4%BD%8D%E5%9B%BE+%E8%AE%A1%E6%95%B0%E9%87%8D%E5%BB%BA%E7%AD%96%E7%95%A5/" title="分片位图+计数重建策略">分片位图+计数重建策略</a><time datetime="2026-07-14T05:11:06.000Z" title="发表于 2026-07-14 13:11:06">2026-07-14</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/12/%E5%B0%8F%E8%AE%B0/2026%E5%B9%B47%E6%9C%88/2026-7-12%E5%B0%8F%E8%AE%B0/" title="2026-7-12小记"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="2026-7-12小记"/></a><div class="content"><a class="title" href="/2026/07/12/%E5%B0%8F%E8%AE%B0/2026%E5%B9%B47%E6%9C%88/2026-7-12%E5%B0%8F%E8%AE%B0/" title="2026-7-12小记">2026-7-12小记</a><time datetime="2026-07-12T14:35:22.000Z" title="发表于 2026-07-12 22:35:22">2026-07-12</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/12/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E7%94%A8%E6%88%B7%E8%B5%84%E6%96%99%E6%9B%B4%E6%96%B0/" title="用户资料更新"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="用户资料更新"/></a><div class="content"><a class="title" href="/2026/07/12/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E7%94%A8%E6%88%B7%E8%B5%84%E6%96%99%E6%9B%B4%E6%96%B0/" title="用户资料更新">用户资料更新</a><time datetime="2026-07-12T04:43:47.000Z" title="发表于 2026-07-12 12:43:47">2026-07-12</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/./img/3.jpg);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By specialweek4</span></div><div class="footer_custom_text">❀写下我想说的话，听我想听的歌。🎸🎶❀</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.4"></script></div></div></body></html>

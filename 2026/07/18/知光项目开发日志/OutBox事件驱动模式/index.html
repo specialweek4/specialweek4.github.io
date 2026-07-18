@@ -1,0 +1,262 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>OutBox事件驱动模式 | specialweek4博客</title><meta name="author" content="specialweek4"><meta name="copyright" content="specialweek4"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="通过 Canal + Outbox + Kafka 的事件驱动方式来异步更新粉丝表、计数和缓存，可以从根本上解决关注业务中的“双写不一致”问题，使 following 成为唯一可信主表，而所有下游（粉丝表、计数、缓存）都作为可延迟、可修复的投影异步生成； 简单来说下游就是如果你的数据是通过“听事件”得来的，且能通过“回放事件&#x2F;重扫主表”修复，那它就是下游，如笔记的点赞数我们可以重新进行扫">
+<meta property="og:type" content="article">
+<meta property="og:title" content="OutBox事件驱动模式">
+<meta property="og:url" content="https://specialweek4.github.io/2026/07/18/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/OutBox%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%A8%A1%E5%BC%8F/index.html">
+<meta property="og:site_name" content="specialweek4博客">
+<meta property="og:description" content="通过 Canal + Outbox + Kafka 的事件驱动方式来异步更新粉丝表、计数和缓存，可以从根本上解决关注业务中的“双写不一致”问题，使 following 成为唯一可信主表，而所有下游（粉丝表、计数、缓存）都作为可延迟、可修复的投影异步生成； 简单来说下游就是如果你的数据是通过“听事件”得来的，且能通过“回放事件&#x2F;重扫主表”修复，那它就是下游，如笔记的点赞数我们可以重新进行扫">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://specialweek4.github.io/img/3.jpg">
+<meta property="article:published_time" content="2026-07-18T04:55:39.000Z">
+<meta property="article:modified_time" content="2026-07-18T06:53:35.343Z">
+<meta property="article:author" content="specialweek4">
+<meta property="article:tag" content="知光">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://specialweek4.github.io/img/3.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "OutBox事件驱动模式",
+  "url": "https://specialweek4.github.io/2026/07/18/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/OutBox%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%A8%A1%E5%BC%8F/",
+  "image": "https://specialweek4.github.io/img/3.jpg",
+  "datePublished": "2026-07-18T04:55:39.000Z",
+  "dateModified": "2026-07-18T06:53:35.343Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "specialweek4",
+      "url": "https://specialweek4.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://specialweek4.github.io/2026/07/18/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/OutBox%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%A8%A1%E5%BC%8F/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'OutBox事件驱动模式',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/./img/4.png);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/./img/1.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">39</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">12</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/./img/3.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">specialweek4博客</span></a><a class="nav-page-title" href="/"><span class="site-name">OutBox事件驱动模式</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">OutBox事件驱动模式</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-07-18T04:55:39.000Z" title="发表于 2026-07-18 12:55:39">2026-07-18</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-07-18T06:53:35.343Z" title="更新于 2026-07-18 14:53:35">2026-07-18</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E7%9F%A5%E5%85%89/">知光</a></span></div><div class="meta-secondline"></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>通过 Canal + Outbox + Kafka 的事件驱动方式来异步更新粉丝表、计数和缓存，可以从根本上解决关注业务中的“双写不一致”问题，使 following 成为唯一可信主表，而所有下游（粉丝表、计数、缓存）都作为可延迟、可修复的投影异步生成；</p>
+<p>简单来说下游就是如果你的数据是通过“听事件”得来的，且能通过“回放事件&#x2F;重扫主表”修复，那它就是下游，如笔记的点赞数我们可以重新进行扫描位图来重新获取。</p>
+<p>同时极大简化写路径、提升写入吞吐、增强系统容错与可恢复性，并允许未来无限扩展新的下游功能（如推荐、搜索等），实现高性能、高一致、可演进的社交关系链架构。</p>
+<h2 id="OutBox事件表设计"><a href="#OutBox事件表设计" class="headerlink" title="OutBox事件表设计"></a>OutBox事件表设计</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">CREATE TABLE IF NOT EXISTS <span class="title function_">outbox</span> <span class="params">(</span></span><br><span class="line"><span class="params">    id BIGINT UNSIGNED NOT NULL,</span></span><br><span class="line"><span class="params">    aggregate_type VARCHAR(<span class="number">64</span>)</span> NOT NULL,     -- <span class="string">&quot;FOLLOW&quot;</span> / <span class="string">&quot;UNFOLLOW&quot;</span></span><br><span class="line">    aggregate_id BIGINT UNSIGNED NULL,       -- 关系ID</span><br><span class="line">    type <span class="title function_">VARCHAR</span><span class="params">(<span class="number">64</span>)</span> NOT NULL,               -- <span class="string">&quot;USER_RELATION_CHANGE&quot;</span></span><br><span class="line">    payload JSON NOT NULL,                   -- 事件详情</span><br><span class="line">    created_at <span class="title function_">TIMESTAMP</span><span class="params">(<span class="number">3</span>)</span> NOT NULL DEFAULT <span class="title function_">CURRENT_TIMESTAMP</span><span class="params">(<span class="number">3</span>)</span>,</span><br><span class="line">    PRIMARY <span class="title function_">KEY</span> <span class="params">(id)</span>,</span><br><span class="line">    KEY <span class="title function_">ix_outbox_agg</span> <span class="params">(aggregate_type, aggregate_id)</span>,</span><br><span class="line">    KEY <span class="title function_">ix_outbox_ct</span> <span class="params">(created_at)</span></span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+<h2 id="一主多从-事件驱动模型设计与实现"><a href="#一主多从-事件驱动模型设计与实现" class="headerlink" title="一主多从+事件驱动模型设计与实现"></a>一主多从+事件驱动模型设计与实现</h2><p>在 following 表的事务提交过程中，将事件写入一个 Outbox 专用表（如事件类型、用户数据和变更内容）</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">* 关注操作，限流通过令牌桶，并写入 Outbox 以异步构建缓存与粉丝表。</span></span><br><span class="line"><span class="comment">* <span class="doctag">@param</span> fromUserId 发起关注的用户ID</span></span><br><span class="line"><span class="comment">* <span class="doctag">@param</span> toUserId 被关注的用户ID</span></span><br><span class="line"><span class="comment">* <span class="doctag">@return</span> 是否关注成功</span></span><br><span class="line"><span class="comment">*/</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="meta">@Transactional</span></span><br><span class="line"><span class="keyword">public</span> <span class="type">boolean</span> <span class="title function_">follow</span><span class="params">(<span class="type">long</span> fromUserId, <span class="type">long</span> toUserId)</span> &#123;</span><br><span class="line">    <span class="comment">// Lua 脚本令牌桶限流</span></span><br><span class="line">    <span class="type">Long</span> <span class="variable">ok</span> <span class="operator">=</span> redis.execute(tokenScript, List.of(<span class="string">&quot;rl:follow:&quot;</span> + fromUserId), <span class="string">&quot;100&quot;</span>, <span class="string">&quot;1&quot;</span>);</span><br><span class="line">    <span class="keyword">if</span> (ok == <span class="literal">null</span> || ok == <span class="number">0L</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">long</span> <span class="variable">id</span> <span class="operator">=</span> ThreadLocalRandom.current().nextLong(Long.MAX_VALUE);</span><br><span class="line">    <span class="comment">// 插入 关注表</span></span><br><span class="line">    <span class="type">int</span> <span class="variable">inserted</span> <span class="operator">=</span> mapper.insertFollowing(id, fromUserId, toUserId, <span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (inserted &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="type">Long</span> <span class="variable">outId</span> <span class="operator">=</span> ThreadLocalRandom.current().nextLong(Long.MAX_VALUE);</span><br><span class="line">            <span class="type">String</span> <span class="variable">payload</span> <span class="operator">=</span> objectMapper.writeValueAsString(<span class="keyword">new</span> <span class="title class_">RelationEvent</span>(<span class="string">&quot;FollowCreated&quot;</span>, fromUserId, toUserId, id));</span><br><span class="line">            <span class="comment">// 插入 Outbox 表</span></span><br><span class="line">            outboxMapper.insert(outId, <span class="string">&quot;following&quot;</span>, id, <span class="string">&quot;FollowCreated&quot;</span>, payload);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception ignored) &#123;&#125;</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>Canal 读取数据库的 Binlog（事务日志），关注 Outbox 表的相关变更</li>
+<li>Canal 通过 CanalKafkaBridge 将事件以 JSON 格式推送到指定 Kafka topic。</li>
+</ul>
+<h3 id="CanalKafkaBridge"><a href="#CanalKafkaBridge" class="headerlink" title="CanalKafkaBridge"></a>CanalKafkaBridge</h3><ul>
+<li>功能：把 Canal 中的数据库变更事件解析为消息，序列化为 JSON 后发送到 Kafka。</li>
+<li>只处理 INSERT 和 UPDATE 类型事件，以确保高效。</li>
+<li>Kafka 的消息主题为 canal-outbox。</li>
+</ul>
+<p><img src="/../../images/%E7%9F%A5%E5%85%89images/6.png" alt="alt text"></p>
+<h3 id="CanalOutboxConsumer"><a href="#CanalOutboxConsumer" class="headerlink" title="CanalOutboxConsumer"></a>CanalOutboxConsumer</h3><ul>
+<li>订阅 Kafka 主题 canal-outbox 的消息内容。</li>
+<li>将消息转换为 RelationEvent，并调用 RelationEventProcessor 进一步进行伪从同步、计数更新等逻辑。</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment">* 消费 Canal outbox 消息并转为关系事件处理。</span></span><br><span class="line"><span class="comment">* 监听 Canal→Kafka 桥接写入的 outbox 主题；使用手动位点提交</span></span><br><span class="line"><span class="comment">* <span class="doctag">@param</span> message Kafka 消息内容</span></span><br><span class="line"><span class="comment">* <span class="doctag">@param</span> ack 位点确认对象</span></span><br><span class="line"><span class="comment">*/</span></span><br><span class="line"><span class="meta">@KafkaListener(topics = OutboxTopics.CANAL_OUTBOX, groupId = &quot;relation-outbox-consumer&quot;)</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">onMessage</span><span class="params">(String message, Acknowledgment ack)</span> &#123;</span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// CanalKafkaBridge 发送的统一结构：&#123;&quot;table&quot;:&quot;outbox&quot;,&quot;type&quot;:&quot;INSERT|UPDATE&quot;,&quot;data&quot;:[&#123;&quot;payload&quot;:&quot;...&quot;&#125;...]&#125;</span></span><br><span class="line">        <span class="type">JsonNode</span> <span class="variable">root</span> <span class="operator">=</span> objectMapper.readTree(message);</span><br><span class="line">        <span class="type">JsonNode</span> <span class="variable">table</span> <span class="operator">=</span> root.get(<span class="string">&quot;table&quot;</span>);</span><br><span class="line">        <span class="comment">// 过滤非 outbox 表的变更</span></span><br><span class="line">        <span class="keyword">if</span> (table == <span class="literal">null</span> || !<span class="string">&quot;outbox&quot;</span>.equals(table.asText())) &#123;</span><br><span class="line">            ack.acknowledge();</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    </span><br><span class="line">        <span class="type">JsonNode</span> <span class="variable">type</span> <span class="operator">=</span> root.get(<span class="string">&quot;type&quot;</span>);</span><br><span class="line">        <span class="comment">// 仅处理 INSERT/UPDATE，其他事件直接确认位点</span></span><br><span class="line">        <span class="keyword">if</span> (type == <span class="literal">null</span> || (!<span class="string">&quot;INSERT&quot;</span>.equals(type.asText()) &amp;&amp; !<span class="string">&quot;UPDATE&quot;</span>.equals(type.asText()))) &#123;</span><br><span class="line">            ack.acknowledge();</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    </span><br><span class="line">        <span class="type">JsonNode</span> <span class="variable">data</span> <span class="operator">=</span> root.get(<span class="string">&quot;data&quot;</span>);</span><br><span class="line">        <span class="comment">// data 必须是行数组；否则确认位点避免重复消费</span></span><br><span class="line">        <span class="keyword">if</span> (data == <span class="literal">null</span> || !data.isArray()) &#123;</span><br><span class="line">            ack.acknowledge();</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    </span><br><span class="line">        <span class="keyword">for</span> (JsonNode row : data) &#123;</span><br><span class="line">            <span class="type">JsonNode</span> <span class="variable">payloadNode</span> <span class="operator">=</span> row.get(<span class="string">&quot;payload&quot;</span>);</span><br><span class="line">            <span class="comment">// 缺少 payload 字段的行跳过</span></span><br><span class="line">            <span class="keyword">if</span> (payloadNode == <span class="literal">null</span>) <span class="keyword">continue</span>;</span><br><span class="line">            <span class="comment">// payload 是 RelationEvent 的 JSON 字符串</span></span><br><span class="line">            <span class="type">RelationEvent</span> <span class="variable">evt</span> <span class="operator">=</span> objectMapper.readValue(payloadNode.asText(), RelationEvent.class);</span><br><span class="line">            <span class="comment">// 将 outbox 事件转为领域事件处理（入库/缓存/计数等）</span></span><br><span class="line">            processor.process(evt);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 本批处理完成后提交位点，确保“已处理”的语义</span></span><br><span class="line">        ack.acknowledge();</span><br><span class="line">    &#125; <span class="keyword">catch</span> (Exception ignored) &#123;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="RelationEventProcessor"><a href="#RelationEventProcessor" class="headerlink" title="RelationEventProcessor"></a>RelationEventProcessor</h3><p>接收到消息后，处理关系事件</p>
+<p>插入粉丝表，更新计数</p>
+<p>这里我们写入Redis，并且设置2小时的TTL目的是，让他过期从数据库中查在更新redis数据，从而保持数据库和缓存的数据一致性，我们在查看用户的关注列表和粉丝是会用到这个键。关注粉丝计数重建是直接查的数据库中的follows字段。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 处理关系事件：入库、更新缓存、刷新计数，并进行幂等去重。</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> evt 关系事件</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">process</span><span class="params">(RelationEvent evt)</span> &#123;</span><br><span class="line">    <span class="comment">//通过维护一个key来做幂等，防止重复消费事件。</span></span><br><span class="line">    <span class="type">String</span> <span class="variable">dk</span> <span class="operator">=</span> <span class="string">&quot;dedup:rel:&quot;</span> + evt.getType() + <span class="string">&quot;:&quot;</span> + evt.getFromUserId() + <span class="string">&quot;:&quot;</span> + evt.getToUserId() + <span class="string">&quot;:&quot;</span> + (evt.getId() == <span class="literal">null</span> ? <span class="string">&quot;0&quot;</span> : String.valueOf(evt.getId()));</span><br><span class="line">    <span class="type">Boolean</span> <span class="variable">first</span> <span class="operator">=</span> redis.opsForValue().setIfAbsent(dk, <span class="string">&quot;1&quot;</span>, Duration.ofMinutes(<span class="number">10</span>));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (first == <span class="literal">null</span> || !first) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (<span class="string">&quot;FollowCreated&quot;</span>.equals(evt.getType())) &#123;</span><br><span class="line">        <span class="comment">// 异步插入粉丝表</span></span><br><span class="line">        mapper.insertFollower(evt.getId(), evt.getToUserId(), evt.getFromUserId(), <span class="number">1</span>);</span><br><span class="line">        <span class="type">long</span> <span class="variable">now</span> <span class="operator">=</span> System.currentTimeMillis();</span><br><span class="line">        redis.opsForZSet().add(<span class="string">&quot;uf:flws:&quot;</span> + evt.getFromUserId(), String.valueOf(evt.getToUserId()), now);</span><br><span class="line">        redis.opsForZSet().add(<span class="string">&quot;uf:fans:&quot;</span> + evt.getToUserId(), String.valueOf(evt.getFromUserId()), now);</span><br><span class="line">        redis.expire(<span class="string">&quot;uf:flws:&quot;</span> + evt.getFromUserId(), Duration.ofHours(<span class="number">2</span>));</span><br><span class="line">        redis.expire(<span class="string">&quot;uf:fans:&quot;</span> + evt.getToUserId(), Duration.ofHours(<span class="number">2</span>));</span><br><span class="line">        userCounterService.incrementFollowings(evt.getFromUserId(), <span class="number">1</span>);</span><br><span class="line">        userCounterService.incrementFollowers(evt.getToUserId(), <span class="number">1</span>);</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (<span class="string">&quot;FollowCanceled&quot;</span>.equals(evt.getType())) &#123;</span><br><span class="line">        mapper.cancelFollower(evt.getToUserId(), evt.getFromUserId());</span><br><span class="line">        redis.opsForZSet().remove(<span class="string">&quot;uf:flws:&quot;</span> + evt.getFromUserId(), String.valueOf(evt.getToUserId()));</span><br><span class="line">        redis.opsForZSet().remove(<span class="string">&quot;uf:fans:&quot;</span> + evt.getToUserId(), String.valueOf(evt.getFromUserId()));</span><br><span class="line">        redis.expire(<span class="string">&quot;uf:flws:&quot;</span> + evt.getFromUserId(), Duration.ofHours(<span class="number">2</span>));</span><br><span class="line">        redis.expire(<span class="string">&quot;uf:fans:&quot;</span> + evt.getToUserId(), Duration.ofHours(<span class="number">2</span>));</span><br><span class="line">        userCounterService.incrementFollowings(evt.getFromUserId(), -<span class="number">1</span>);</span><br><span class="line">        userCounterService.incrementFollowers(evt.getToUserId(), -<span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="优势"><a href="#优势" class="headerlink" title="优势"></a>优势</h2><h3 id="1-彻底解决“双写不一致”问题"><a href="#1-彻底解决“双写不一致”问题" class="headerlink" title="1.彻底解决“双写不一致”问题"></a>1.彻底解决“双写不一致”问题</h3><p>在没有 Outbox + MQ 的情况下：这是最常见的 双写不一致问题。</p>
+<p>而使用 Outbox + Kafka：</p>
+<h4 id="following-表写入-Outbox-写入"><a href="#following-表写入-Outbox-写入" class="headerlink" title="following 表写入 + Outbox 写入"></a>following 表写入 + Outbox 写入</h4><p><code>在 同一个数据库事务 里完成</code></p>
+<ul>
+<li>DB 成功即 Outbox 事件成功</li>
+<li>DB 失败则事件不会产生</li>
+</ul>
+<p><code>从而保证事件不会丢、不会串、不会乱。</code></p>
+<p>然后下游（粉丝表、计数、缓存）全部消费 同一条事件 进行投影更新。</p>
+<h4 id="最终保证粉丝表、计数、缓存和-following-一致"><a href="#最终保证粉丝表、计数、缓存和-following-一致" class="headerlink" title="最终保证粉丝表、计数、缓存和 following 一致"></a>最终保证粉丝表、计数、缓存和 following 一致</h4><p>稍有延时，但绝不会发生“following 是关注状态，但 follower 表没有”这种数据错误。</p>
+<h3 id="2-写路径轻量化，避免热点用户导致写放大"><a href="#2-写路径轻量化，避免热点用户导致写放大" class="headerlink" title="2.写路径轻量化，避免热点用户导致写放大"></a>2.写路径轻量化，避免热点用户导致写放大</h3><p><code>那可能就有人问了，那把关注表，粉丝表，计数更新，缓存列表更新都放在同一分布式事务不行吗</code></p>
+<p>想把 MySQL + Redis + Kafka 真正绑成一个事务，只能上 分布式事务&#x2F;XA&#x2F;二阶段提交，代价非常高：</p>
+<ul>
+<li>性能差（两阶段提交、锁时间变长）</li>
+<li>架构复杂（协调者、回滚、阻塞）</li>
+<li>高可用变差（任一参与者挂了会拖死全局）</li>
+</ul>
+<p>而且强耦合，任一组件故障就整体挂</p>
+<ul>
+<li>Redis 挂了 → 关注接口也跟着报错，你只能降级成“关注功能不可用”。</li>
+<li>MQ 或缓存集群问题也会影响主链路。</li>
+<li>而事件异步的设计是：主表成功就算主业务成功，下游可以慢一点、甚至短暂挂掉，之后自动追平。</li>
+</ul>
+<p>如果在业务侧同步写三个地方：</p>
+<ol>
+<li>following  </li>
+<li>follower  </li>
+<li>Redis 计数  </li>
+<li>Redis ZSet 缓存</li>
+</ol>
+<p>一个关注操作变成了4次写 + 可能的网络跳转，在高并发下压力巨大。这里解释一下<code>“业务侧同步”</code>：用户点击“关注”时，follow 方法除了往数据库 insert 一条关注记录，还会同步地、在同一个事务内去更新 Redis 中的关注&#x2F;粉丝 ZSet、更新粉丝计数、发送通知等。所有动作必须全部成功或全部回滚，响应给用户时缓存已经是最新的。</p>
+<p>而我们使用 Outbox + MQ 的异步模式：</p>
+<p>关注时只做1件事：写 following + outbox（一次事务）</p>
+<p>其他的全部异步“自己去处理”</p>
+<p>→ 写路径极轻，只需一次 DB 事务操作</p>
+<p>→ 不参杂 Redis&#x2F;粉丝表&#x2F;缓存更新逻辑，不会阻塞用户请求</p>
+<p>→ 写性能大幅提升，P99 延迟显著降低</p>
+<h3 id="3-只有-following-是“权威”，下游都是“投影表”"><a href="#3-只有-following-是“权威”，下游都是“投影表”" class="headerlink" title="3.只有 following 是“权威”，下游都是“投影表”"></a>3.只有 following 是“权威”，下游都是“投影表”</h3><p>事件流架构（Event Sourcing 思想的一部分）规定：<br><code>业务真相（truth）只存一次，其余表都是投影（Projection）</code></p>
+<h4 id="使用-MQ-Outbox-的好处是："><a href="#使用-MQ-Outbox-的好处是：" class="headerlink" title="使用 MQ + Outbox 的好处是："></a>使用 MQ + Outbox 的好处是：</h4><ul>
+<li>所有下游（follower 表、计数、缓存）都只依赖事件，不耦合主库。</li>
+<li>下游任何地方坏了，都不会影响主路径。</li>
+<li>下游可以随时丢弃并通过事件回放 &#x2F; 全量扫描重建。</li>
+</ul>
+<p>这在社交关系这种 高变更 + 高查询 + 大体量 的场景里非常关键。</p>
+<h3 id="4-高可扩展性：你可以添加无限多的下游服务"><a href="#4-高可扩展性：你可以添加无限多的下游服务" class="headerlink" title="4.高可扩展性：你可以添加无限多的下游服务"></a>4.高可扩展性：你可以添加无限多的下游服务</h3><p>如果未来我们要做：</p>
+<ul>
+<li>推荐画像：更新用户兴趣图谱</li>
+<li>数据仓库（DW）：打入 ClickHouse&#x2F;Hudi&#x2F;S3</li>
+<li>风控系统：监控异常关注行为</li>
+<li>搜索服务：更新 ES 存储库<br>那么我们无需修改关注代码，只需：</li>
+</ul>
+<p>新增消费者 → 订阅事件 → 做自己的投影</p>
+<p>这就是 Kafka 事件驱动架构最大的牛逼之处。→ 业务演进与主线代码彻底解耦</p>
+<h3 id="5-失败可恢复：重试-重放-对账-修复"><a href="#5-失败可恢复：重试-重放-对账-修复" class="headerlink" title="5. 失败可恢复：重试 + 重放 + 对账 + 修复"></a>5. 失败可恢复：重试 + 重放 + 对账 + 修复</h3><p>没有 Outbox 时：</p>
+<ul>
+<li>follower 表只要有一次失败，就永远不一致</li>
+<li>Redis 计数异常 + 超卖 + 回滚全靠人工</li>
+</ul>
+<p>使用 Outbox + Kafka + Canal 可以得到以下能力：</p>
+<ol>
+<li>Kafka 重试与消息保留机制<br>: <code>消费者挂掉了也不会丢消息。</code></li>
+<li>Outbox 幂等事件重放<br>: <code>下游投影可重建（计数可以自动修正）。</code>是指利用 Outbox 表中持久化的事件记录，在需要时（如消费者故障恢复、数据修复、投影重建）重新投递并处理历史事件</li>
+<li>Canal 可用于全量快照 &amp; 重建粉丝表:</li>
+</ol>
+<ul>
+<li>&#96;当粉丝表挂掉：详情见Canal-binlog 增量订阅</li>
+<li>全量扫描 following → 重建 follower 表</li>
+</ul>
+<ol start="4">
+<li>计数对账任务</li>
+</ol>
+<ul>
+<li>每日自动比对 following 聚合值与 Redis 计数是否一致，并自动修修复。</li>
+<li>这些能力允许我们构建一个 可修复 的系统，这在大规模业务中至关重要。</li>
+</ul>
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E7%9F%A5%E5%85%89/">知光</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/07/15/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97/" title="计数模块"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">计数模块</div></div><div class="info-2"><div class="info-item-1">这里的计数主要是对点赞收藏计数，关系图如下：设计： 配置位图分片配置 BitmapShard.java固定分片大小（32K 位），将用户 ID 映射为分片序号和片内偏移，避免单键膨胀。 123456789101112131415161718/** * 位图分片配置与帮助函数。 * 采用固定分片大小，避免单键因用户ID偏移过大而膨胀。 */public final class BitmapShard &#123;    // 每个分片的位数（32K 位 =&gt; 4KB/分片）    public static final int CHUNK_SIZE = 32_768;    public static long chunkOf(long userId) &#123;        return userId / CHUNK_SIZE;    &#125;    public static long bitOf(long userId) &#123;        return userId % CHUNK_SIZE;    &#125;    private BitmapSh...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/Kafka%E5%BC%82%E6%AD%A5%E5%86%99-%E5%86%99%E8%81%9A%E5%90%88/" title="Kafka异步写 + 写聚合"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-14</div><div class="info-item-2">Kafka异步写 + 写聚合</div></div><div class="info-2"><div class="info-item-1">方案背景：高并发行为计数的核心痛点在社交、电商等高频交互场景中，用户的点赞（like）、收藏（fav）、评论等行为会产生海量计数更新请求。 “同步直写最终计数”的方案在高并发下暴露诸多致命问题，成为系统性能瓶颈，具体可归纳为三大核心痛点： (一)写热点与写放大问题突出 1.高频细粒度写入引发热点压力：用户每一次行为操作都直接写入最终计数存储，形成高频次、细粒度的写请求。热门实体（如爆款帖子、大V）的计数键会成为“热点行”，集中占用存储节点的CPU、IO资源，导致响应延迟飙升。 问题本质：每一次用户行为（点赞、收藏）都转化为一条对存储的写命令，直接更新某个实体的总计数。比如用户给帖子 article:123 点赞，传统做法可能是执行 INCR like_count:article:123。当遇到爆款帖子或大V发布的内容时，同一时刻会有成千上万个用户同时点赞，所有的写请求都会涌向同一个计数键。这个键就成了“热点行”，存储节点（Redis 单线程、数据库行锁）的所有 CPU 和 IO 资源都被它抢占，其他请求的响应延迟就会飙升。 位图分片如何应对 分散键名：位图分片使用键 bm:lik...</div></div></div></a><a class="pagination-related" href="/2026/07/10/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E9%A1%B9%E7%9B%AE%E9%85%8D%E7%BD%AE/" title="项目配置"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-10</div><div class="info-item-2">项目配置</div></div><div class="info-2"><div class="info-item-1">全局异常处理器GlobalExceptionHandler.java 123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081import jakarta.validation.ConstraintViolationException;import lombok.extern.slf4j.Slf4j;import com.tongji.common.exception.BusinessException;import com.tongji.common.exception.ErrorCode;import org.springframework.http.HttpStatus;import org.springframework.http.ResponseEntity;import org.springframework.valida...</div></div></div></a><a class="pagination-related" href="/2026/07/07/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E7%99%BB%E5%BD%95%E6%B3%A8%E5%86%8C/" title="登录注册"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-07</div><div class="info-item-2">登录注册</div></div><div class="info-2"><div class="info-item-1">在知光APP中，采用 Spring Security + JWT 的双令牌机制，将短期的 accessToken 与长期的 refreshToken 分离：  accessToken 负责高性能、无状态的接口访问认证 refreshToken 负责长期会话的续期与控制。  这样既提升了账号安全性（缩小单次泄露的影响范围、支持强制下线与风控），又保证了用户的长期免登录体验，同时兼顾了分布式架构下的扩展性和会话管理能力。 什么是双令牌accessToken（访问令牌）  作用：每次访问业务接口时，用来证明“我是某某用户”。比如你现在的 Authorization: Bearer xxx 就是 accessToken。  特点：  有效期 很短（比如 15 分钟、30 分钟）。 内部自带用户 ID、角色、权限等信息（JWT 的 payload）。 后端 只需要校验签名和是否过期，一般不查数据库，性能好、扩展性强。   使用方式： 前端每次调 &#x2F;api&#x2F;v1&#x2F;xxx 时带上它用以权限认证。   refreshToken（刷新令牌）  作用：不直接访问业务接口...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/./img/1.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">specialweek4</div><div class="author-info-description">specialweek4的博客,记录我的学习和生活点滴</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">39</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">12</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/specialweek4"><i class="fab fa-github"></i><span>关注我</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/specialweek4" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:504957307@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#OutBox%E4%BA%8B%E4%BB%B6%E8%A1%A8%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.</span> <span class="toc-text">OutBox事件表设计</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E4%B8%BB%E5%A4%9A%E4%BB%8E-%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%A8%A1%E5%9E%8B%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%AE%9E%E7%8E%B0"><span class="toc-number">2.</span> <span class="toc-text">一主多从+事件驱动模型设计与实现</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#CanalKafkaBridge"><span class="toc-number">2.1.</span> <span class="toc-text">CanalKafkaBridge</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#CanalOutboxConsumer"><span class="toc-number">2.2.</span> <span class="toc-text">CanalOutboxConsumer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RelationEventProcessor"><span class="toc-number">2.3.</span> <span class="toc-text">RelationEventProcessor</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BC%98%E5%8A%BF"><span class="toc-number">3.</span> <span class="toc-text">优势</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%BD%BB%E5%BA%95%E8%A7%A3%E5%86%B3%E2%80%9C%E5%8F%8C%E5%86%99%E4%B8%8D%E4%B8%80%E8%87%B4%E2%80%9D%E9%97%AE%E9%A2%98"><span class="toc-number">3.1.</span> <span class="toc-text">1.彻底解决“双写不一致”问题</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#following-%E8%A1%A8%E5%86%99%E5%85%A5-Outbox-%E5%86%99%E5%85%A5"><span class="toc-number">3.1.1.</span> <span class="toc-text">following 表写入 + Outbox 写入</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9C%80%E7%BB%88%E4%BF%9D%E8%AF%81%E7%B2%89%E4%B8%9D%E8%A1%A8%E3%80%81%E8%AE%A1%E6%95%B0%E3%80%81%E7%BC%93%E5%AD%98%E5%92%8C-following-%E4%B8%80%E8%87%B4"><span class="toc-number">3.1.2.</span> <span class="toc-text">最终保证粉丝表、计数、缓存和 following 一致</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%86%99%E8%B7%AF%E5%BE%84%E8%BD%BB%E9%87%8F%E5%8C%96%EF%BC%8C%E9%81%BF%E5%85%8D%E7%83%AD%E7%82%B9%E7%94%A8%E6%88%B7%E5%AF%BC%E8%87%B4%E5%86%99%E6%94%BE%E5%A4%A7"><span class="toc-number">3.2.</span> <span class="toc-text">2.写路径轻量化，避免热点用户导致写放大</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%8F%AA%E6%9C%89-following-%E6%98%AF%E2%80%9C%E6%9D%83%E5%A8%81%E2%80%9D%EF%BC%8C%E4%B8%8B%E6%B8%B8%E9%83%BD%E6%98%AF%E2%80%9C%E6%8A%95%E5%BD%B1%E8%A1%A8%E2%80%9D"><span class="toc-number">3.3.</span> <span class="toc-text">3.只有 following 是“权威”，下游都是“投影表”</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8-MQ-Outbox-%E7%9A%84%E5%A5%BD%E5%A4%84%E6%98%AF%EF%BC%9A"><span class="toc-number">3.3.1.</span> <span class="toc-text">使用 MQ + Outbox 的好处是：</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E9%AB%98%E5%8F%AF%E6%89%A9%E5%B1%95%E6%80%A7%EF%BC%9A%E4%BD%A0%E5%8F%AF%E4%BB%A5%E6%B7%BB%E5%8A%A0%E6%97%A0%E9%99%90%E5%A4%9A%E7%9A%84%E4%B8%8B%E6%B8%B8%E6%9C%8D%E5%8A%A1"><span class="toc-number">3.4.</span> <span class="toc-text">4.高可扩展性：你可以添加无限多的下游服务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E5%A4%B1%E8%B4%A5%E5%8F%AF%E6%81%A2%E5%A4%8D%EF%BC%9A%E9%87%8D%E8%AF%95-%E9%87%8D%E6%94%BE-%E5%AF%B9%E8%B4%A6-%E4%BF%AE%E5%A4%8D"><span class="toc-number">3.5.</span> <span class="toc-text">5. 失败可恢复：重试 + 重放 + 对账 + 修复</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/07/18/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/OutBox%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%A8%A1%E5%BC%8F/" title="OutBox事件驱动模式"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="OutBox事件驱动模式"/></a><div class="content"><a class="title" href="/2026/07/18/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/OutBox%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E6%A8%A1%E5%BC%8F/" title="OutBox事件驱动模式">OutBox事件驱动模式</a><time datetime="2026-07-18T04:55:39.000Z" title="发表于 2026-07-18 12:55:39">2026-07-18</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/15/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97/" title="计数模块"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="计数模块"/></a><div class="content"><a class="title" href="/2026/07/15/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97/" title="计数模块">计数模块</a><time datetime="2026-07-15T06:53:06.000Z" title="发表于 2026-07-15 14:53:06">2026-07-15</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%AE%9A%E5%88%B6%E5%8C%96Redis-SDS/" title="定制化Redis SDS"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="定制化Redis SDS"/></a><div class="content"><a class="title" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%AE%9A%E5%88%B6%E5%8C%96Redis-SDS/" title="定制化Redis SDS">定制化Redis SDS</a><time datetime="2026-07-14T09:08:58.000Z" title="发表于 2026-07-14 17:08:58">2026-07-14</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/Kafka%E5%BC%82%E6%AD%A5%E5%86%99-%E5%86%99%E8%81%9A%E5%90%88/" title="Kafka异步写 + 写聚合"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Kafka异步写 + 写聚合"/></a><div class="content"><a class="title" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/Kafka%E5%BC%82%E6%AD%A5%E5%86%99-%E5%86%99%E8%81%9A%E5%90%88/" title="Kafka异步写 + 写聚合">Kafka异步写 + 写聚合</a><time datetime="2026-07-14T06:11:26.000Z" title="发表于 2026-07-14 14:11:26">2026-07-14</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%88%86%E7%89%87%E4%BD%8D%E5%9B%BE+%E8%AE%A1%E6%95%B0%E9%87%8D%E5%BB%BA%E7%AD%96%E7%95%A5/" title="分片位图+计数重建策略"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="分片位图+计数重建策略"/></a><div class="content"><a class="title" href="/2026/07/14/%E7%9F%A5%E5%85%89%E9%A1%B9%E7%9B%AE%E5%BC%80%E5%8F%91%E6%97%A5%E5%BF%97/%E5%88%86%E7%89%87%E4%BD%8D%E5%9B%BE+%E8%AE%A1%E6%95%B0%E9%87%8D%E5%BB%BA%E7%AD%96%E7%95%A5/" title="分片位图+计数重建策略">分片位图+计数重建策略</a><time datetime="2026-07-14T05:11:06.000Z" title="发表于 2026-07-14 13:11:06">2026-07-14</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/./img/3.jpg);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By specialweek4</span></div><div class="footer_custom_text">❀写下我想说的话，听我想听的歌。🎸🎶❀</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.4"></script></div></div></body></html>

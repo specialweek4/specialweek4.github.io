@@ -1,0 +1,163 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>JUC | specialweek4博客</title><meta name="author" content="specialweek4"><meta name="copyright" content="specialweek4"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="specialweek4的博客,记录我的学习和生活点滴">
+<meta property="og:type" content="article">
+<meta property="og:title" content="JUC">
+<meta property="og:url" content="https://specialweek4.github.io/2026/07/30/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/JUC/index.html">
+<meta property="og:site_name" content="specialweek4博客">
+<meta property="og:description" content="specialweek4的博客,记录我的学习和生活点滴">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://specialweek4.github.io/img/3.jpg">
+<meta property="article:published_time" content="2026-07-30T03:30:02.000Z">
+<meta property="article:modified_time" content="2026-07-30T03:49:00.782Z">
+<meta property="article:author" content="specialweek4">
+<meta property="article:tag" content="JUC">
+<meta property="article:tag" content="java面试">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://specialweek4.github.io/img/3.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "JUC",
+  "url": "https://specialweek4.github.io/2026/07/30/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/JUC/",
+  "image": "https://specialweek4.github.io/img/3.jpg",
+  "datePublished": "2026-07-30T03:30:02.000Z",
+  "dateModified": "2026-07-30T03:49:00.782Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "specialweek4",
+      "url": "https://specialweek4.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://specialweek4.github.io/2026/07/30/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/JUC/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'JUC',
+  isHighlightShrink: false,
+  isToc: false,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/./img/4.png);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/./img/1.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">51</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">18</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">11</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/./img/3.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">specialweek4博客</span></a><a class="nav-page-title" href="/"><span class="site-name">JUC</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">JUC</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-07-30T03:30:02.000Z" title="发表于 2026-07-30 11:30:02">2026-07-30</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-07-30T03:49:00.782Z" title="更新于 2026-07-30 11:49:00">2026-07-30</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/JUC/">JUC</a></span></div><div class="meta-secondline"></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"></article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/JUC/">JUC</a><a class="post-meta__tags" href="/tags/java%E9%9D%A2%E8%AF%95/">java面试</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/07/30/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/java%E9%9B%86%E5%90%88%E7%AF%87/" title="java集合篇"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">java集合篇</div></div><div class="info-2"><div class="info-item-1">数组和集合的区别，用过哪些集合？数组和集合的区别：  数组是固定长度的数据结构，一旦创建长度就无法改变；而集合是动态长度的数据结构，可以根据需要动态增加或减少元素。 数组可以包含基本数据类型和对象，而集合只能包含对象。 数组可以直接通过下标访问元素，而集合需要通过迭代器或其他方法访问元素。  我用过的一些java集合类  ArrayList： 动态数组，支持动态增长。 LinkedList： 双向链表，支持快速的插入和删除操作。 HashMap： 基于哈希表的Map实现，存储键值对，通过键快速查找值。 HashSet： 基于HashMap实现的Set集合，用于存储唯一元素。 TreeMap： 基于红黑树实现的有序Map集合，可以按照键的顺序进行排序。  说说java中的集合List是有序的Collection，使用此接口能够精确的控制每个元素的插入位置，用户能根据索引访问List中元素。常用的实现List的类有LinkedList，ArrayList。  ArrayList：是容量可变的列表，其底层使用数组实现。当几何扩容时，会创建更大的数组，并把原数组复制到新数组。ArrayL...</div></div></div></a><a class="pagination-related" href="/2026/07/29/%E5%8A%9B%E6%89%A3hot/" title="力扣hot"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">力扣hot</div></div><div class="info-2"><div class="info-item-1">两数之和最长连续序列给定一个未排序的整数数组 nums ，找出数字连续的最长序列（不要求序列元素在原数组中连续）的长度。 请你设计并实现时间复杂度为 O(n) 的算法解决此问题。 示例 1： 输入：nums &#x3D; [100,4,200,1,3,2]输出：4解释：最长数字连续序列是 [1, 2, 3, 4]。它的长度为 4。示例 2： 输入：nums &#x3D; [0,3,7,2,5,8,4,6,0,1]输出：9示例 3： 输入：nums &#x3D; [1,0,1,2]输出：3 123456789101112131415161718192021222324class Solution &#123;    public int longestConsecutive(int[] nums) &#123;        Set&lt;Integer&gt; set = new HashSet&lt;Integer&gt;();        for(int num: nums)&#123;            set.add(num);        &#125;     ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/07/27/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/JVM/" title="JVM"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-27</div><div class="info-item-2">JVM</div></div><div class="info-2"><div class="info-item-1">JVM的组成部分JVM是 java 程序的运行环境（java二进制字节码的运行环境），能够一次编写，到处运行；自动内存管理，垃圾回收机制。 JVM的主要组成部分  ClassLoader（类加载器） Runtime Data Area（运行时数据区，内存分区） Execution Engine（执行引擎）：解释器，即时编译器，垃圾回收 Native Method Library（本地库接口）  运行流程： 类加载：java 源码 → javac 编译 → .class 字节码 → 类加载器三步加载 → 放入运行时数据区 → 执行引擎（解释 + JIT 编译 + GC）→ 必要时调用本地库接口 → 操作系统执行。 指令的执行流程：PC 取指 → 译码识别操作码 → 必要时查常量池解析符号引用 → 操作数栈执行运算 → 读写栈&#x2F;堆&#x2F;方法区 → PC 后移 → 循环。 JVM 本质上就是一个 while(true) 循环，不断取指令、译指令、执行指令，直到程序结束。 JVM的内存结构 运行时数据区Java 虚拟机在运行 Java 程序过程中管理的内存区域，称之为运行...</div></div></div></a><a class="pagination-related" href="/2026/07/19/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/MySQL%E8%AF%AD%E6%B3%95%E5%A4%8D%E4%B9%A0/" title="MySQL语法复习"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-19</div><div class="info-item-2">MySQL语法复习</div></div><div class="info-2"><div class="info-item-1">操作符 顺序查询的编写顺序 select -&gt; from -&gt; where -&gt; groupby -&gt; having -&gt; orderby -&gt; limit 执行顺序：from -&gt; where -&gt; groupby -&gt; having -&gt; select -&gt; orderby -&gt; limit 函数SELECT就相当于展示,函数的一般使用 select 函数，就可以在输出台上展示。如： A. concat：字符串拼接  ⭐⭐⭐ 1select concat(&#x27;Hello&#x27; , &#x27; MySQL&#x27;); B. lower：全部转小写 upper全部大写 1select lower(&#x27;Hello&#x27;); C. lpad：左填充 和 rpad: 右填充 1select lpad(&#x27;01&#x27;, 5, &#x27;-&#x27;); D. trim：去除空格 G. substring：截取子字符串 ⭐ 1select substring(&#x2...</div></div></div></a><a class="pagination-related" href="/2026/07/25/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/Spring%E6%A1%86%E6%9E%B6/" title="Spring框架"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-25</div><div class="info-item-2">Spring框架</div></div><div class="info-2"><div class="info-item-1">本文主要介绍Spring特性：IoC容器、AOP、事务管理、MVC框架等 spring 框架中的bean是线程安全的吗？这里解释以下什么是无状态，无状态就是不能被修改，spring bean并没有可变的状态，因为bean是单例的，注入的都是无状态的对象（一个类型的bean只有一个）。所以某种程度上Spring的单例bean是线程安全的。 如果在bean中定义了可修改的成员变量的话，是要考虑线程安全问题的。可以使用bean多例（使用@Scope注解修改成多例）和加锁来解决。 bean的生命周期Spring Bean 的生命周期概括为五个阶段：实例化 → 属性填充 → 初始化 → 使用 → 销毁。  实例化：Spring 通过反射调用构造方法创建 Bean 实例。   比如你写了一个 UserService 类，Spring 在启动时通过反射调用 UserService.class.newInstance()（底层等价于 new UserService()），在内存中创建出这个类的对象，这就是实例化。   属性填充：给 Bean 注入依赖的属性值（依赖注入）。  依赖属性值，简单说就...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/./img/1.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">specialweek4</div><div class="author-info-description">specialweek4的博客,记录我的学习和生活点滴</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">51</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">18</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">11</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/specialweek4"><i class="fab fa-github"></i><span>关注我</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/specialweek4" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:504957307@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="sticky_layout"><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/07/30/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/java%E9%9B%86%E5%90%88%E7%AF%87/" title="java集合篇"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="java集合篇"/></a><div class="content"><a class="title" href="/2026/07/30/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/java%E9%9B%86%E5%90%88%E7%AF%87/" title="java集合篇">java集合篇</a><time datetime="2026-07-30T03:48:16.000Z" title="发表于 2026-07-30 11:48:16">2026-07-30</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/30/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/JUC/" title="JUC"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="JUC"/></a><div class="content"><a class="title" href="/2026/07/30/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/JUC/" title="JUC">JUC</a><time datetime="2026-07-30T03:30:02.000Z" title="发表于 2026-07-30 11:30:02">2026-07-30</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/29/%E5%8A%9B%E6%89%A3hot/" title="力扣hot"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="力扣hot"/></a><div class="content"><a class="title" href="/2026/07/29/%E5%8A%9B%E6%89%A3hot/" title="力扣hot">力扣hot</a><time datetime="2026-07-29T14:24:28.000Z" title="发表于 2026-07-29 22:24:28">2026-07-29</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/27/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/JVM/" title="JVM"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="JVM"/></a><div class="content"><a class="title" href="/2026/07/27/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/JVM/" title="JVM">JVM</a><time datetime="2026-07-27T09:58:02.000Z" title="发表于 2026-07-27 17:58:02">2026-07-27</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/07/25/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/Spring%E6%A1%86%E6%9E%B6/" title="Spring框架"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Spring框架"/></a><div class="content"><a class="title" href="/2026/07/25/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/Spring%E6%A1%86%E6%9E%B6/" title="Spring框架">Spring框架</a><time datetime="2026-07-25T04:17:13.000Z" title="发表于 2026-07-25 12:17:13">2026-07-25</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/./img/3.jpg);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By specialweek4</span></div><div class="footer_custom_text">❀写下我想说的话，听我想听的歌。🎸🎶❀</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.4"></script></div></div></body></html>

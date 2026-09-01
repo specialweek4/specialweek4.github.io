@@ -1,0 +1,564 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>计数模块前后端联调 | specialweek4博客</title><meta name="author" content="specialweek4"><meta name="copyright" content="specialweek4"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="用户点赞 前端访问&#x2F;{blogId}&#x2F;like，like接口，调用BlogController的like方法，方法接收blogId 在like方法中调用requirePublished(blogId);方法查看博客是否存在&#x2F;发布 然后调用CounterServiceImpl的like方法，like方法调用toggle方法改变该博客的BitMap，成功的话则写入据聚合桶">
+<meta property="og:type" content="article">
+<meta property="og:title" content="计数模块前后端联调">
+<meta property="og:url" content="https://specialweek4.github.io/2026/08/26/%E9%9B%80%E8%B7%83/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/index.html">
+<meta property="og:site_name" content="specialweek4博客">
+<meta property="og:description" content="用户点赞 前端访问&#x2F;{blogId}&#x2F;like，like接口，调用BlogController的like方法，方法接收blogId 在like方法中调用requirePublished(blogId);方法查看博客是否存在&#x2F;发布 然后调用CounterServiceImpl的like方法，like方法调用toggle方法改变该博客的BitMap，成功的话则写入据聚合桶">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://specialweek4.github.io/img/3.jpg">
+<meta property="article:published_time" content="2026-08-26T04:26:35.000Z">
+<meta property="article:modified_time" content="2026-08-31T09:58:56.439Z">
+<meta property="article:author" content="specialweek4">
+<meta property="article:tag" content="雀跃">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://specialweek4.github.io/img/3.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "计数模块前后端联调",
+  "url": "https://specialweek4.github.io/2026/08/26/%E9%9B%80%E8%B7%83/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/",
+  "image": "https://specialweek4.github.io/img/3.jpg",
+  "datePublished": "2026-08-26T04:26:35.000Z",
+  "dateModified": "2026-08-31T09:58:56.439Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "specialweek4",
+      "url": "https://specialweek4.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://specialweek4.github.io/2026/08/26/%E9%9B%80%E8%B7%83/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '计数模块前后端联调',
+  isHighlightShrink: false,
+  isToc: false,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/./img/14.png);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">61</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">20</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/./img/3.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">specialweek4博客</span></a><a class="nav-page-title" href="/"><span class="site-name">计数模块前后端联调</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">计数模块前后端联调</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-08-26T04:26:35.000Z" title="发表于 2026-08-26 12:26:35">2026-08-26</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-08-31T09:58:56.439Z" title="更新于 2026-08-31 17:58:56">2026-08-31</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E9%9B%80%E8%B7%83/">雀跃</a></span></div><div class="meta-secondline"></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p><strong>用户点赞</strong></p>
+<p>前端访问&#x2F;{blogId}&#x2F;like，like接口，调用BlogController的like方法，方法接收blogId</p>
+<p>在like方法中调用requirePublished(blogId);方法查看博客是否存在&#x2F;发布</p>
+<p>然后调用CounterServiceImpl的like方法，like方法调用toggle方法改变该博客的BitMap，成功的话则写入据聚合桶和脏版本，返回是否修改成功 changed</p>
+<p>再调用CounterServiceImpl的getCounts方法方法获取该博客的like计数，返回count</p>
+<p>然后用CounterActionResult封装blogid，active(true为已点赞)，changed（是否修改成功），counts（点赞数量）</p>
+<p>返回给前端</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> com.specialweek.counter.dto;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">CounterActionResult</span><span class="params">(</span></span><br><span class="line"><span class="params"></span></span><br><span class="line"><span class="params">      <span class="type">long</span> blogId,</span></span><br><span class="line"><span class="params"></span></span><br><span class="line"><span class="params">      <span class="type">boolean</span> active,</span></span><br><span class="line"><span class="params"></span></span><br><span class="line"><span class="params">      <span class="type">boolean</span> changed,</span></span><br><span class="line"><span class="params"></span></span><br><span class="line"><span class="params">      <span class="type">long</span> count)</span> &#123;</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>前端更新显示实时的计数。</p>
+<p><strong>取消点赞</strong></p>
+<p>前端访问 DELETE &#x2F;blog&#x2F;{blogId}&#x2F;like，调用 BlogController 的 unlike 方法，方法接收 blogId</p>
+<p>unlike 方法中先调用 requirePublished(blogId); 方法查看博客是否存在&#x2F;发布</p>
+<p>然后调用 CounterServiceImpl 的 unlike 方法，unlike 调用 toggle 方法把该用户在该博客点赞 BitMap 中对应的位置 0，成功的话则向聚合桶写入 -1、脏版本 +1，返回是否修改成功 changed</p>
+<p>再调用 CounterServiceImpl 的 getCounts 方法获取该博客最新的 like 计数，返回 count</p>
+<p>然后用 CounterActionResult 封装 blogId，active（false 为已取消点赞），changed（是否修改成功），count（点赞数量）</p>
+<p>返回给前端，前端熄灭点赞图标并把计数减一</p>
+<p><strong>收藏</strong></p>
+<p>前端访问 PUT &#x2F;blog&#x2F;{blogId}&#x2F;favorite，调用 BlogController 的 favorite 方法，方法接收 blogId</p>
+<p>favorite 方法中先调用 requirePublished(blogId); 方法查看博客是否存在&#x2F;发布</p>
+<p>然后调用 CounterServiceImpl 的 fav 方法，fav 调用 toggle 方法把该用户在该博客收藏 BitMap 中对应的位置 1，成功的话则向聚合桶写入 +1、脏版本 +1，返回是否修改成功 changed</p>
+<p>再调用 CounterServiceImpl 的 getCounts 方法获取该博客最新的 fav 计数，返回 count</p>
+<p>然后用 CounterActionResult 封装 blogId，active（true 为已收藏），changed（是否修改成功），count（收藏数量）</p>
+<p>返回给前端，前端点亮收藏图标并更新收藏数</p>
+<p><strong>取消收藏</strong></p>
+<p>前端访问 DELETE &#x2F;blog&#x2F;{blogId}&#x2F;favorite，调用 BlogController 的 unfavorite 方法，方法接收 blogId</p>
+<p>unfavorite 方法中先调用 requirePublished(blogId); 方法查看博客是否存在&#x2F;发布</p>
+<p>然后调用 CounterServiceImpl 的 unfav 方法，unfav 调用 toggle 方法把该用户在该博客收藏 BitMap 中对应的位置 0，成功的话则向聚合桶写入 -1、脏版本 +1，返回是否修改成功 changed</p>
+<p>再调用 CounterServiceImpl 的 getCounts 方法获取该博客最新的 fav 计数，返回 count</p>
+<p>然后用 CounterActionResult 封装 blogId，active（false 为已取消收藏），changed（是否修改成功），count（收藏数量）</p>
+<p>返回给前端，前端熄灭收藏图标并把收藏数减一</p>
+<p><strong>查看热门页</strong></p>
+<p>前端访问 GET &#x2F;blog&#x2F;hot?current&#x3D;{page}，调用 BlogController 的 queryHotBlog 方法，方法接收 current（页码）和可空的登录态 jwt</p>
+<p>queryHotBlog 方法把 jwt 的 subject 解析为当前用户 ID（未登录为 null），然后调用 BlogFeedService 的 getPublicFeed 方法，传入 page、size（每页 10 条）和用户 ID</p>
+<p>getPublicFeed 方法先走三级缓存（L2 Caffeine 本地页缓存、L1 热门页 ID 列表、L0 博客片段）拿公共基础页，三层都未命中时回源 MySQL 的 selectHotFeed，并用 singleFlight 锁防止高并发下同一页同时回源造成缓存击穿，回源后回填缓存</p>
+<p>拿到基础页后调用 enrich 方法做返回前的计数与用户态覆盖：readCounts 调用 CounterService 的 getCountsBatch 方法一次 pipeline 读取整页 like&#x2F;fav 实时计数；readFlags 调用 BitmapStateReader 的 getFlagsBatch 方法一次 pipeline 读取当前用户的 isLike&#x2F;faved；readFollowed 调用 FollowStateService 的 getBatch 方法批量补齐 followed（登录时）</p>
+<p>最后组装 FeedPageResponse，queryHotBlog 只取其中的 items 数组返回给前端，前端渲染整页卡片</p>
+<blockquote>
+<p>FeedPageResponse</p>
+</blockquote>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">FeedPageResponse</span><span class="params">(</span></span><br><span class="line"><span class="params">        List&lt;FeedItemResponse&gt; items,</span></span><br><span class="line"><span class="params">        <span class="type">int</span> page,</span></span><br><span class="line"><span class="params">        <span class="type">int</span> size,</span></span><br><span class="line"><span class="params">        <span class="type">boolean</span> hasMore)</span> &#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>FeedItemResponse</p>
+</blockquote>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">FeedItemResponse</span><span class="params">(</span></span><br><span class="line"><span class="params">        Long id,</span></span><br><span class="line"><span class="params">        Long userId,</span></span><br><span class="line"><span class="params">        String title,</span></span><br><span class="line"><span class="params">        String description,</span></span><br><span class="line"><span class="params">        String images,</span></span><br><span class="line"><span class="params">        String coverUrl,</span></span><br><span class="line"><span class="params">        <span class="type">long</span> liked,</span></span><br><span class="line"><span class="params">        <span class="type">long</span> favorites,</span></span><br><span class="line"><span class="params">        Integer comments,</span></span><br><span class="line"><span class="params">        LocalDateTime publishTime,</span></span><br><span class="line"><span class="params">        String name,</span></span><br><span class="line"><span class="params">        String icon,</span></span><br><span class="line"><span class="params">        <span class="type">boolean</span> isLike,</span></span><br><span class="line"><span class="params">        <span class="type">boolean</span> faved,</span></span><br><span class="line"><span class="params">        <span class="type">boolean</span> followed)</span> &#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>查看详情页</strong></p>
+<p>前端访问 GET &#x2F;blog&#x2F;detail&#x2F;{id}，调用 BlogController 的 queryBlogById 方法，方法接收 id 和可空的登录态 jwt</p>
+<p>查询到博客后，若是已发布博客，调用 CounterService 的 getCounts 方法覆盖该博客的 liked&#x2F;favorites 实时计数</p>
+<p>登录状态下再调用 BitmapStateReader 的 getFlagsBatch 方法覆盖 isLike&#x2F;faved，调用 FollowStateService 的 isFollowed 方法覆盖 followed；未登录时三个状态全部置 false</p>
+<p>返回给前端Blog类的结果，前端渲染详情页的点赞、收藏与关注按钮状态</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="meta">@EqualsAndHashCode(callSuper = false)</span></span><br><span class="line"><span class="meta">@Accessors(chain = true)</span></span><br><span class="line"><span class="meta">@TableName(&quot;tb_blog&quot;)</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">Blog</span> <span class="keyword">implements</span> <span class="title class_">Serializable</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">long</span> <span class="variable">serialVersionUID</span> <span class="operator">=</span> <span class="number">1L</span>;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@TableId(value = &quot;id&quot;, type = IdType.AUTO)</span></span><br><span class="line">    <span class="keyword">private</span> Long id;</span><br><span class="line">    <span class="keyword">private</span> Long userId;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@TableField(exist = false)</span> <span class="keyword">private</span> String icon;</span><br><span class="line">    <span class="meta">@TableField(exist = false)</span> <span class="keyword">private</span> String name;</span><br><span class="line">    <span class="meta">@TableField(exist = false)</span> <span class="keyword">private</span> Boolean isLike;</span><br><span class="line">    <span class="meta">@TableField(exist = false)</span> <span class="keyword">private</span> String contentText;</span><br><span class="line">    <span class="meta">@TableField(exist = false)</span> <span class="keyword">private</span> String contentUrl;</span><br><span class="line">    <span class="meta">@TableField(exist = false)</span> <span class="keyword">private</span> List&lt;UserDTO&gt; likes;</span><br><span class="line">    <span class="meta">@TableField(exist = false)</span> <span class="keyword">private</span> Boolean followed;</span><br><span class="line">    <span class="meta">@TableField(exist = false)</span> <span class="keyword">private</span> Boolean faved;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> Integer favorites;</span><br><span class="line">    <span class="keyword">private</span> String title;</span><br><span class="line">    <span class="keyword">private</span> String description;</span><br><span class="line">    <span class="keyword">private</span> String images;</span><br><span class="line">    <span class="keyword">private</span> String coverUrl;</span><br><span class="line">    <span class="keyword">private</span> String contentObjectKey;</span><br><span class="line">    <span class="keyword">private</span> Integer liked;</span><br><span class="line">    <span class="keyword">private</span> Integer comments;</span><br><span class="line">    <span class="keyword">private</span> Integer status;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime publishTime;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime createTime;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime updateTime;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>通用行为接口（知光风格）</strong></p>
+<p>前端访问 POST &#x2F;api&#x2F;v1&#x2F;action&#x2F;like，body 为 ActionRequest{entityType, entityId}，调用 ActionController 的 like 方法，方法接收请求体和登录态 jwt</p>
+<p>like 方法从 jwt 解析出用户 ID，调用 CounterService 的 like(entityType, entityId, uid) 完成位图切换与聚合桶写入，再调用 isLiked 方法实查当前状态，返回 Map 结构 {changed: 是否变化, liked: 当前是否点赞}</p>
+<p>unlike、fav、unfav 三个接口流程相同，只是调用的服务方法分别是 CounterService 的 unlike&#x2F;fav&#x2F;unfav，返回的第二个字段分别为 liked&#x2F;faved</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> com.specialweek.counter.api.dto;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> jakarta.validation.constraints.NotBlank;</span><br><span class="line"><span class="keyword">import</span> lombok.Data;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ActionRequest</span> &#123;</span><br><span class="line">    <span class="meta">@NotBlank</span></span><br><span class="line">    <span class="keyword">private</span> String entityType;</span><br><span class="line">    <span class="meta">@NotBlank</span></span><br><span class="line">    <span class="keyword">private</span> String entityId;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<p><strong>通用计数读取接口</strong></p>
+<p>前端访问 GET &#x2F;api&#x2F;v1&#x2F;counter&#x2F;{etype}&#x2F;{eid}?metrics&#x3D;like,fav，调用 CounterController 的 getCounts 方法，方法接收 etype（实体类型）、eid（实体 ID）和 metrics（指标列表，逗号分隔，可省略）</p>
+<p>getCounts 方法先对 metrics 按 CounterSchema 的 SUPPORTED_METRICS 白名单过滤出支持的指标（like&#x2F;fav），然后调用 CounterService 的 getCounts 方法读取该实体的实时逻辑计数（SDS 快照 + 未刷聚合桶），结构缺失时自动按位图分片 BITCOUNT 重建</p>
+<p>最后用 CountsResponse 封装 entityType、entityId、counts 返回给前端</p>
+<p><strong>关注&#x2F;取消关注</strong></p>
+<p>前端访问 PUT &#x2F;follow&#x2F;{id}&#x2F;{isFollow}，调用 FollowController 的 follow 方法，方法接收 id（目标用户）、isFollow（true 关注 &#x2F; false 取消）和登录态 jwt</p>
+<p>isFollow 为 true 时调用 FollowServiceImpl 的 follow 方法：事务内先校验目标用户存在，insertIgnore 幂等插入关注关系，成功的话在 tb_user_info 上把当前用户 followee +1、目标用户 fans +1，事务提交后调用 FollowStateService 的 setFollowState 方法覆盖关注状态短缓存 qy:state:follow:{userId}:{targetUserId}</p>
+<p>isFollow 为 false 时调用 FollowServiceImpl 的 unfollow 方法：事务内 deleteRelation 删除关系，成功的话 followee&#x2F;fans 各 -1（带大于 0 的保护），事务提交后同样覆盖关注状态短缓存</p>
+<p>最后用 FollowActionResponse 封装 targetUserId、following（动作后的状态）、changed（是否真正改变关系）返回给前端，前端据此切换关注按钮并刷新粉丝数</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> com.specialweek.follow.dto;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">FollowActionResponse</span><span class="params">(<span class="type">long</span> targetUserId, <span class="type">boolean</span> following, <span class="type">boolean</span> changed)</span> &#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+
+
+
+
+
+
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E9%9B%80%E8%B7%83/">雀跃</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/01/%E9%9B%80%E8%B7%83/%E5%85%B3%E4%BA%8E%E9%A1%B9%E7%9B%AE%E9%83%A8%E7%BD%B2%E4%B8%8A%E7%BA%BF/" title="关于项目部署上线"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">关于项目部署上线</div></div><div class="info-2"><div class="info-item-1">快速部署自己的线上项目     mindmap   root((快速部署自己的线上项目))     01：服务器与域名购买       注意点         服务器是必需的，域名不是         两者都需要付费购买         服务器购买后即可使用，域名需要备案       服务器         相当于一台远程电脑         购买时分配公网 IP           192.168.x.x 是局域网 IP       域名         备案后才可以使用         建议和服务器在同一家服务商购买         配置 DNS 解析     02：服务器连接方案       注意         云服务器不能像家用电脑一样直接打开       操作方案         SSH 命令操作         Xshell 或 FTP 传输文件     03：软件安装       Nginx         sudo yum install nginx -y       Node.js         直接安装固定版本         使用 NVM 管理版本   ...</div></div></div></a><a class="pagination-related" href="/2026/08/24/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃计数，关系模块2"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">雀跃计数，关系模块2</div></div><div class="info-2"><div class="info-item-1">雀跃计数模块后端代码设计与讲解 一、设计亮点使用BitMap在Redis中记录用户行为（是否点赞，收藏），SDS快照(二进制GET + 聚合桶) dirty 脏版本 + CounterCheckpointJob：每 30 秒把逻辑计数写回 tb_blog.liked/favorites（热榜排序用），批次完成后失效一次热榜缓存 L1&#x2F;L2； BitmapStateReader：整页 pipeline GETBIT 批量用户态 counter_read.lua：原子读取“SDS + 聚合桶”的逻辑计数 关注&#x2F;粉丝计数由MySQL事务维护 counter_read.lua 逻辑同时读（SDS + 桶，立即正确）二、大概的流程123456789101112131415161718192021222324写路径  POST /api/v1/action/like|unlike|fav|unfav（body: entityType/entityId）  PUT/DELETE /blog/&#123;blogId&#125;/like|favorite（雀跃前端在用的博客...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/08/17/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83JWT%E5%8F%8C%E4%BB%A4%E7%89%8C%E7%99%BB%E5%BD%95%E6%94%B9%E9%80%A0/" title="雀跃JWT双令牌登录改造"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-17</div><div class="info-item-2">雀跃JWT双令牌登录改造</div></div><div class="info-2"><div class="info-item-1">雀跃登录模块改造教程：JWT 双令牌 + Redis 白名单 + Spring Security1. V2.0登录设计 用户仍通过雀跃原来的 /user/code 获取手机验证码。 用户向 /auth/login 提交手机号和验证码。 后端返回一对 RSA 签名的 JWT： accessToken：15 分钟有效，只用于访问业务接口； refreshToken：7 天有效，只用于换取一对新令牌。   refresh token 的 jti 会存入 Redis 白名单：auth:refresh:{userId}:{jti}。 访问业务接口时发送 Authorization: Bearer &lt;accessToken&gt;。 Spring Security 自动校验 access token，并把解析后的 JWT 放入安全上下文。 Controller 可以通过 @AuthenticationPrincipal Jwt jwt 获取 JWT，再通过 jwt.getSubject() 取得 userId。 access token 过期后，客户端调用 /auth/token/re...</div></div></div></a><a class="pagination-related" href="/2026/08/17/%E9%9B%80%E8%B7%83/queyueblogOSS%E5%AD%98%E5%82%A8/" title="queyueblogOSS存储"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-17</div><div class="info-item-2">queyueblogOSS存储</div></div><div class="info-2"><div class="info-item-1">blogOSS存储v1.0存储设计1234567内容	 存哪	 数据库字段标题	 MySQL	 title封面	 OSS	 cover_url（URL）其它图片	 OSS	 images（URL 逗号分隔）正文	 OSS	 content_object_key（只存对象键）草稿/发布 MySQL	 status（0/1）摘要      MySQL      desci 最多50字  核心流程雀跃就是对OSS对象存储的简单实现,整体流程如下： 12345678910111213141516171819202122前端(App)               后端(Spring Boot)               阿里云 OSS   │                         │                              │   │ 1. POST /storage/presign│                              │   │    &#123;scene:&quot;blog_cover&quot;, │             ...</div></div></div></a><a class="pagination-related" href="/2026/07/23/%E9%9B%80%E8%B7%83/%E6%BB%91%E5%8A%A8%E7%AA%97%E5%8F%A3%E9%99%90%E6%B5%81/" title="滑动窗口限流"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-23</div><div class="info-item-2">滑动窗口限流</div></div><div class="info-2"><div class="info-item-1">限流是为了防止一段时间内有太多的请求打到我们的服务器，引起雪崩导致整个应用挂掉。 我们这里是在Contorller中使用了限流注解来实现限流。 可以运用Redis来实现分布式限流 三个限流算法令牌桶算法如果令牌桶满了，当补充者再次放入的时候，他就会丢掉 漏桶算法把请求放到了一个桶里面。 滑动窗口算法使用ZSET来实现，把请求到达的时间作为score，需要判断的时候我们以时间排序，统计五秒内的请求数。根据设置的阈值来判断是否要处理该请求。 对每个请求都执行我们定义的AOP方法，一个请求来的时候如果当前窗口没有满的话，就加入到ZSET里面表示对当前请求放行，不用记住这个请求是谁，只需要记住这个请求来的时间就行了，相同时间来的请求会用随机后缀来区分。相反如果一个请求来的时候窗口已满的话，就不存入ZSET中，并抛出异常。 在下面的LUa脚本中我们使用 因为传过来的now是最新的时间，在（now - window）到 now 秒这一段时间内就是最新的滑动窗口，也就是说我们只看近window秒的内ZSET中的请求的数量。 使用滑动窗口实现限流自定义注解自定义限流注解：包含限流key前缀、时间...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">specialweek4</div><div class="author-info-description">specialweek4的博客,记录我的学习和生活点滴</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">61</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">20</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">13</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/specialweek4"><i class="fab fa-github"></i><span>关注我</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/specialweek4" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:504957307@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">❀Specialweek Blog❀ 记录我的学习和生活，分享我喜欢的东西。🎸🎶❀</div></div><div class="sticky_layout"><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/09/01/%E9%9B%80%E8%B7%83/%E5%85%B3%E4%BA%8E%E9%A1%B9%E7%9B%AE%E9%83%A8%E7%BD%B2%E4%B8%8A%E7%BA%BF/" title="关于项目部署上线"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="关于项目部署上线"/></a><div class="content"><a class="title" href="/2026/09/01/%E9%9B%80%E8%B7%83/%E5%85%B3%E4%BA%8E%E9%A1%B9%E7%9B%AE%E9%83%A8%E7%BD%B2%E4%B8%8A%E7%BA%BF/" title="关于项目部署上线">关于项目部署上线</a><time datetime="2026-09-01T09:10:15.000Z" title="发表于 2026-09-01 17:10:15">2026-09-01</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/08/26/%E9%9B%80%E8%B7%83/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="计数模块前后端联调"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="计数模块前后端联调"/></a><div class="content"><a class="title" href="/2026/08/26/%E9%9B%80%E8%B7%83/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="计数模块前后端联调">计数模块前后端联调</a><time datetime="2026-08-26T04:26:35.000Z" title="发表于 2026-08-26 12:26:35">2026-08-26</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/08/24/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃计数，关系模块2"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃计数，关系模块2"/></a><div class="content"><a class="title" href="/2026/08/24/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃计数，关系模块2">雀跃计数，关系模块2</a><time datetime="2026-08-24T02:20:41.000Z" title="发表于 2026-08-24 10:20:41">2026-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/08/17/%E9%9B%80%E8%B7%83/queyueblogOSS%E5%AD%98%E5%82%A8/" title="queyueblogOSS存储"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="queyueblogOSS存储"/></a><div class="content"><a class="title" href="/2026/08/17/%E9%9B%80%E8%B7%83/queyueblogOSS%E5%AD%98%E5%82%A8/" title="queyueblogOSS存储">queyueblogOSS存储</a><time datetime="2026-08-17T12:37:59.000Z" title="发表于 2026-08-17 20:37:59">2026-08-17</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/08/17/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83JWT%E5%8F%8C%E4%BB%A4%E7%89%8C%E7%99%BB%E5%BD%95%E6%94%B9%E9%80%A0/" title="雀跃JWT双令牌登录改造"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃JWT双令牌登录改造"/></a><div class="content"><a class="title" href="/2026/08/17/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83JWT%E5%8F%8C%E4%BB%A4%E7%89%8C%E7%99%BB%E5%BD%95%E6%94%B9%E9%80%A0/" title="雀跃JWT双令牌登录改造">雀跃JWT双令牌登录改造</a><time datetime="2026-08-17T01:20:41.000Z" title="发表于 2026-08-17 09:20:41">2026-08-17</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/./img/3.jpg);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By specialweek4</span></div><div class="footer_custom_text">❀写下我想说的话，听我想听的歌。🎸🎶❀</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.4"></script></div></div></body></html>

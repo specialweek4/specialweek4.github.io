@@ -1,0 +1,660 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>计算机网络 | specialweek4博客</title><meta name="author" content="specialweek4"><meta name="copyright" content="specialweek4"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="在浏览器中输入 URL 到页面展示，到底发生了什么？  在浏览器中输入指定网页的 URL。 浏览器通过 DNS 协议，获取域名对应的 IP 地址。 浏览器根据 IP 地址和端口号，向目标服务器发起一个 TCP 连接请求。 浏览器在 TCP 连接上，向服务器发送一个 HTTP 请求报文，请求获取网页的内容。 服务器收到 HTTP 请求报文后，处理请求，并返回 HTTP 响应报文给浏览器。 浏览器接收">
+<meta property="og:type" content="article">
+<meta property="og:title" content="计算机网络">
+<meta property="og:url" content="https://specialweek4.github.io/2026/09/02/%E8%AE%A1%E7%AE%97%E6%9C%BA%E5%9B%9B%E5%A4%A7%E4%BB%B6/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/index.html">
+<meta property="og:site_name" content="specialweek4博客">
+<meta property="og:description" content="在浏览器中输入 URL 到页面展示，到底发生了什么？  在浏览器中输入指定网页的 URL。 浏览器通过 DNS 协议，获取域名对应的 IP 地址。 浏览器根据 IP 地址和端口号，向目标服务器发起一个 TCP 连接请求。 浏览器在 TCP 连接上，向服务器发送一个 HTTP 请求报文，请求获取网页的内容。 服务器收到 HTTP 请求报文后，处理请求，并返回 HTTP 响应报文给浏览器。 浏览器接收">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://specialweek4.github.io/img/3.jpg">
+<meta property="article:published_time" content="2026-09-02T04:23:31.000Z">
+<meta property="article:modified_time" content="2026-09-03T05:56:48.804Z">
+<meta property="article:author" content="specialweek4">
+<meta property="article:tag" content="计算机四大件">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://specialweek4.github.io/img/3.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "计算机网络",
+  "url": "https://specialweek4.github.io/2026/09/02/%E8%AE%A1%E7%AE%97%E6%9C%BA%E5%9B%9B%E5%A4%A7%E4%BB%B6/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/",
+  "image": "https://specialweek4.github.io/img/3.jpg",
+  "datePublished": "2026-09-02T04:23:31.000Z",
+  "dateModified": "2026-09-03T05:56:48.804Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "specialweek4",
+      "url": "https://specialweek4.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://specialweek4.github.io/2026/09/02/%E8%AE%A1%E7%AE%97%E6%9C%BA%E5%9B%9B%E5%A4%A7%E4%BB%B6/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '计算机网络',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/./img/14.png);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">63</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">21</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">14</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/./img/3.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">specialweek4博客</span></a><a class="nav-page-title" href="/"><span class="site-name">计算机网络</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">计算机网络</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-02T04:23:31.000Z" title="发表于 2026-09-02 12:23:31">2026-09-02</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-03T05:56:48.804Z" title="更新于 2026-09-03 13:56:48">2026-09-03</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E5%9B%9B%E5%A4%A7%E4%BB%B6/">计算机四大件</a></span></div><div class="meta-secondline"></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>在浏览器中输入 URL 到页面展示，到底发生了什么？</p>
+<ol>
+<li>在浏览器中输入指定网页的 URL。</li>
+<li>浏览器通过 DNS 协议，获取域名对应的 IP 地址。</li>
+<li>浏览器根据 IP 地址和端口号，向目标服务器发起一个 TCP 连接请求。</li>
+<li>浏览器在 TCP 连接上，向服务器发送一个 HTTP 请求报文，请求获取网页的内容。</li>
+<li>服务器收到 HTTP 请求报文后，处理请求，并返回 HTTP 响应报文给浏览器。</li>
+<li>浏览器接收响应报文，解析 HTML、CSS、JS，进行页面渲染；同时根据页面中的图片、样式、脚本等资源 URL，继续发起请求，直到页面完整显示。</li>
+<li>浏览器在不需要和服务器通信时，可以主动关闭 TCP 连接，或者等待服务器的关闭请求。</li>
+</ol>
+<h2 id="网络模型"><a href="#网络模型" class="headerlink" title="网络模型"></a>网络模型</h2><p><img src="/../../images/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9Cimages/1.png" alt="alt text"></p>
+<h3 id="OSI模型"><a href="#OSI模型" class="headerlink" title="OSI模型"></a>OSI模型</h3><p>对于OSI参考模型，常见的网络设备实现的层次如下，各个节点之间会使用物理传输媒体进行连接：<br><img src="/../../images/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9Cimages/2.png" alt="alt text"></p>
+<p>OSI 参考模型各层的任务与功能如下：</p>
+<table>
+<thead>
+<tr>
+<th>层次</th>
+<th>任务</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>#7 应用层</strong></td>
+<td>实现特定网络应用</td>
+<td>略</td>
+</tr>
+<tr>
+<td><strong>#6 表示层</strong></td>
+<td>解决不同主机上信息表示不一致的问题</td>
+<td>数据格式转换</td>
+</tr>
+<tr>
+<td><strong>#5 会话层</strong></td>
+<td>管理进程间会话</td>
+<td>会话管理</td>
+</tr>
+<tr>
+<td><strong>#4 传输层</strong></td>
+<td>实现端到端（进程到进程）通信</td>
+<td>复用和分用、差错控制、流量控制、连接管理、可靠传输管理</td>
+</tr>
+<tr>
+<td><strong>#3 网络层</strong></td>
+<td>把分组从源结点转发到目的结点</td>
+<td>路由选择、分组转发、拥塞控制、网际互联、差错控制、流量控制、连接管理、可靠传输管理</td>
+</tr>
+<tr>
+<td><strong>#2 数据链路层</strong></td>
+<td>确保相邻节点之间的链路逻辑上无差错</td>
+<td>差错控制、流量控制</td>
+</tr>
+<tr>
+<td><strong>#1 物理层</strong></td>
+<td>实现相邻节点之间比特的传输</td>
+<td>需定义电路接口参数、信号的含义&#x2F;电气特性等</td>
+</tr>
+</tbody></table>
+<p>第0层为物理传输媒体</p>
+<p>不同层次的有些功能虽然一样但是操作针对的单位不同。因为数据链路层的 差错检测 只能保证帧的正确性，所以在网络层也有一个差错检测用来保证 分组 的正确性。连接管理和可靠传输管理同理。</p>
+<p>报文段是全局数据，分组、帧和bit是局部数据，由上一句我们可以知道 局部正确 不能&#x3D;&gt; 全局正确，但是全局正确必然能够 &#x3D;&gt; 局部正确，也就是说我们只需要在传输层对报文段进行检测的话就可以判断传输的数据可不可靠，TCP&#x2F;IP就把网络层的 差错控制、流量控制、连接管理、可靠传输管理 给砍掉了，只在传输层对收到的报文段进行这些操作。</p>
+<p>每一层负责的职能不同：</p>
+<blockquote>
+<p>物理层：负责在物理网络中传输比特流，定义电气、机械等接口标准。</p>
+</blockquote>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">┌────────────────┐           ┌────────────────┐</span><br><span class="line">│                │  比特bit  │                │</span><br><span class="line">│  1物理层       │ ---------&gt;│  1物理层        │</span><br><span class="line">└────────────────┘           └────────────────┘</span><br><span class="line">              物理传输媒体（网线）</span><br><span class="line">     节点1     ===============      节点2</span><br></pre></td></tr></table></figure>
+<p>物理传输媒体就比如家里面路由器和电脑主机相连的那个两头带卡扣的线。</p>
+<p>外界噪声的干扰可能会导致电信号变形，所以传输数据的时接收方可能会接收到错误的信号，这时候就需要引入<code>数据链路层</code>。</p>
+<blockquote>
+<p>数据链路层：负责数据的封帧和差错检测，以及 MAC 寻址。</p>
+</blockquote>
+<p>任务：是确保相邻节点之间的链路逻辑上无差错。包含以下功能</p>
+<ol>
+<li><code>差错控制</code>：</li>
+<li><code>流量控制</code>：协调两个节点的速率</li>
+</ol>
+<p>数据链路层以 帧 为单位传输数据</p>
+<p><code>以上三层能保证相邻节点之间逻辑上无差错的传输数据，大多数情况下我们需要经过多个路由器的转发来实现节点之间的数据传输，为了实现数据的存储转发就需要引入网络层。</code></p>
+<blockquote>
+<p>网络层：负责主导数据的路由与转发工作，通过 IP 地址进行逻辑寻址。</p>
+</blockquote>
+<p>网络层任务:把“分组”从源结点转发到目的结点。包含以下功能</p>
+<ol>
+<li><code>路由选择</code>:构造并维护路由表,决定分组到达目的节点的最佳路径</li>
+<li><code>分组转发</code>:将“分组”从合适的端口转发出去</li>
+<li>拥塞控制</li>
+<li>网际互联</li>
+<li>差错检测、流量控制来确保传输的数据报无差错、可靠的传输管理</li>
+<li>连接建立与释放：确保分组的有序、不重复到达</li>
+<li>可靠传输管理：接收方需返回分组确认消息</li>
+</ol>
+<p>网络层以 <code>数据报</code>(分组) 为单位传输数据。<br><img src="/../../images/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9Cimages/3.png" alt="alt text"></p>
+<p><code>网络层实现了主机之间的转发。但是主机中又有很多进程如微信、QQ、QQ音乐等，这时候就需要引入传输层来实现进程到进程之间的通信,因为每个进程都对应以个端口号，所以又称为端到端通信。</code></p>
+<blockquote>
+<p>传输层：负责端到端的数据传输任务（端：端口 &#x2F; 进程）。</p>
+</blockquote>
+<p>包含以下功能：</p>
+<ol>
+<li>复用和分用</li>
+<li>差错检测、流量控制来确保传输的数据报无差错、可靠的传输管理</li>
+<li>连接建立与释放：确保报文段的有序、不重复到达</li>
+<li>可靠传输管理：接收方需返回报文段确认消息</li>
+</ol>
+<p>传数层的传输单位是报文段，一个报文段可能被分为多个分组，网络层把这些分组发送给目的节点，目的节点接收后由目的节点的网络层拼凑成完整的报文段，交付给目的节点的传输层。<br><img src="/../../images/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9Cimages/4.png" alt="alt text"><br>在数据的发送方多个进程可以通过端口号去请求传输层的服务，这是传输层的<code>复用</code>，在数据的接收方传输层又可以通过端口号把对应的数据分派给对应的进程，这是传输层的<code>分用</code>。</p>
+<blockquote>
+<p>会话层：管理进程间会话</p>
+</blockquote>
+<p>主要功能</p>
+<ol>
+<li>会话管理（采用检查点机制，当通信失效的时候从检查点继续恢复通信，类似于文件的断点续传）</li>
+</ol>
+<blockquote>
+<p>表示层：负责把数据转换成兼容另一个系统能识别的格式，包括加密、压缩等。</p>
+</blockquote>
+<blockquote>
+<p>应用层：负责为各类应用程序提供统一的网络服务接口</p>
+</blockquote>
+<p><img src="/../../images/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9Cimages/5.png" alt="alt text"><br>数据的发送方从应用层开始向下将一个文件（又称报文），依次拆分成小的数据单位，直到拆分成bit，这个过程为分段，数据接收方，又会依次将数据重组，这个过程为重组。</p>
+<p>并且上面的层次会使用下面一层的功能，如应用层会使用表示层的数据格式转换，表示层会使用会话层的会话管理功能。</p>
+<h3 id="TCP-IP模型"><a href="#TCP-IP模型" class="headerlink" title="TCP&#x2F;IP模型"></a>TCP&#x2F;IP模型</h3><p>对于 数据格式转换 和 会话管理 功能，如果传文件两台机器编码格式一样就不需要数据格式转换、在传文件的时网络中断我们选择重新传整个文件也是可以的，所以说这两个功能不是必须的。在TCP&#x2F;IP中就干掉了表示层和会话层，因为并不是所有的网络应用都需要这两个功能。如果某些应用实在需要可以选择应用层的特定协议来实现。</p>
+<ul>
+<li>应用层：为各类网络应用提供统一通信服务接口，让应用程序不用关心底层的网络传输细节。</li>
+<li>传输层：实现两台主机上应用程序的 “端到端” 通信，提供通用的数据传输服务</li>
+<li>网络层：负责主导数据包的跨网络路由与转发工作，通过 IP 地址实现主机级寻址（IP 协议）</li>
+<li>网络接口层：负责数据的封帧、MAC 寻址与差错检测，以及在物理介质中传输比特流8</li>
+</ul>
+<blockquote>
+<p>对于OSI模型对于第一层要干什么，第二层要干什么，分别拥有哪些功能，有哪些特性都需要有清晰明确的规定，也就是说一个厂商在研发物理层和数据链层的设备的时候必须遵循OSI参考模型的规定，TCP&#x2F;IP 对于网络层以下的层次即网络接口层，只规定了任务(实现相邻节点间的数据传输，为网络层传输“分组”)，但具体怎么传输不做规定。TCP&#x2F;IP模型比较自由。</p>
+</blockquote>
+<p>TCP&#x2F;IP模型只在传输层对收到的报文段进行 差错控制、流量控制、连接管理、可靠传输管理，网络层并没有这些检测，所以网络层的数据可能是好的也可能是坏的，不可靠。<br><img src="/../../images/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9Cimages/6.png" alt="alt text"></p>
+<p>这样的<code>好处就是网络核心部分（路由器）的功能相对简单，负载底，造价底</code>。数据传输的正确、可靠由传输层负责,压力给到“网络边缘部分(主机)”</p>
+<p>TCP&#x2F;IP 模型各层的任务与功能如下（记忆口诀：用叔网接）：</p>
+<table>
+<thead>
+<tr>
+<th>层次</th>
+<th>任务</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>#4 应用层</strong></td>
+<td>实现特定网络应用</td>
+<td>略</td>
+</tr>
+<tr>
+<td><strong>#3 传输层</strong></td>
+<td>实现端到端（进程到进程）通信</td>
+<td>复用和分用、差错控制、流量控制、连接管理、可靠传输管理</td>
+</tr>
+<tr>
+<td><strong>#2 网络层</strong></td>
+<td>把分组从源结点转发到目的结点</td>
+<td>路由选择、分组转发、拥塞控制、网际互联</td>
+</tr>
+<tr>
+<td><strong>#1 网络接口层</strong></td>
+<td>实现相邻节点之间的数据传输（为网络层传输”分组”）</td>
+<td>未规定</td>
+</tr>
+</tbody></table>
+<p><img src="/../../images/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9Cimages/7.png" alt="alt text"><br>在OSI模型中如果在网络层中 差错控制、流量控制、连接管理、可靠传输管理 全部启用就会想传输层提供有连接可靠的服务，如果没有启动那么就和TCP&#x2F;IP模型一样就是无连接不可靠的服务。在TCP&#x2F;IP的传输层也有同理的选项。</p>
+<h2 id="应用层"><a href="#应用层" class="headerlink" title="应用层"></a>应用层</h2><p>网络应用模型：1.C&#x2F;S模型 2.p2p模型</p>
+<p>C&#x2F;S（客户端&#x2F;服务器）模型：</p>
+<ul>
+<li>由客户端和服务器组成，客户端和服务器不平等，客户端发起请求，服务器集中提供服务。</li>
+<li>服务器统一管理数据和资源，便于维护、安全控制和权限管理。</li>
+<li>服务器性能和网络状况会影响整体服务，容易形成中心节点或性能瓶颈。</li>
+<li>常见于网站、邮箱、数据库等应用。</li>
+</ul>
+<p>P2P（对等网络）模型：</p>
+<ul>
+<li>网络中的每个节点地位平等，既可以请求服务，也可以提供服务。</li>
+<li>资源分布在多个节点上，具有较好的扩展性和一定的容错能力。</li>
+<li>无需依赖单一中心服务器，可充分利用各节点的带宽和存储资源。</li>
+<li>节点管理、安全控制较复杂，节点离线可能影响资源获取。</li>
+<li>常见于文件共享、区块链和部分即时通信应用。</li>
+</ul>
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E5%9B%9B%E5%A4%A7%E4%BB%B6/">计算机四大件</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/02/%E5%B8%B8%E7%94%A8blog%E7%AC%A6%E5%8F%B7/" title="常用blog符号"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">常用blog符号</div></div><div class="info-2"><div class="info-item-1">1234┌────────────────┐        ┌────────────────┐│                │        │                ││                │        │                │└────────────────┘        └────────────────┘</div></div></div></a><a class="pagination-related" href="/2026/09/01/%E9%9B%80%E8%B7%83/%E5%85%B3%E4%BA%8E%E9%A1%B9%E7%9B%AE%E9%83%A8%E7%BD%B2%E4%B8%8A%E7%BA%BF/" title="关于项目部署上线"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">关于项目部署上线</div></div><div class="info-2"><div class="info-item-1">快速部署自己的线上项目     mindmap   root((快速部署自己的线上项目))     01：服务器与域名购买       注意点         服务器是必需的，域名不是         两者都需要付费购买         服务器购买后即可使用，域名需要备案       服务器         相当于一台远程电脑         购买时分配公网 IP           192.168.x.x 是局域网 IP       域名         备案后才可以使用         建议和服务器在同一家服务商购买         配置 DNS 解析     02：服务器连接方案       注意         云服务器不能像家用电脑一样直接打开       操作方案         SSH 命令操作         Xshell 或 FTP 传输文件     03：软件安装       Nginx         sudo yum install nginx -y       Node.js         直接安装固定版本         使用 NVM 管理版本   ...</div></div></div></a></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">specialweek4</div><div class="author-info-description">specialweek4的博客,记录我的学习和生活点滴</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">63</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">21</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">14</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/specialweek4"><i class="fab fa-github"></i><span>关注我</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/specialweek4" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:504957307@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">❀Specialweek Blog❀ 记录我的学习和生活，分享我喜欢的东西。🎸🎶❀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BD%91%E7%BB%9C%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.</span> <span class="toc-text">网络模型</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#OSI%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.1.</span> <span class="toc-text">OSI模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#TCP-IP%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.2.</span> <span class="toc-text">TCP&#x2F;IP模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BA%94%E7%94%A8%E5%B1%82"><span class="toc-number">2.</span> <span class="toc-text">应用层</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/09/02/%E5%B8%B8%E7%94%A8blog%E7%AC%A6%E5%8F%B7/" title="常用blog符号"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="常用blog符号"/></a><div class="content"><a class="title" href="/2026/09/02/%E5%B8%B8%E7%94%A8blog%E7%AC%A6%E5%8F%B7/" title="常用blog符号">常用blog符号</a><time datetime="2026-09-02T05:25:48.000Z" title="发表于 2026-09-02 13:25:48">2026-09-02</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/02/%E8%AE%A1%E7%AE%97%E6%9C%BA%E5%9B%9B%E5%A4%A7%E4%BB%B6/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/" title="计算机网络"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="计算机网络"/></a><div class="content"><a class="title" href="/2026/09/02/%E8%AE%A1%E7%AE%97%E6%9C%BA%E5%9B%9B%E5%A4%A7%E4%BB%B6/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C/" title="计算机网络">计算机网络</a><time datetime="2026-09-02T04:23:31.000Z" title="发表于 2026-09-02 12:23:31">2026-09-02</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/01/%E9%9B%80%E8%B7%83/%E5%85%B3%E4%BA%8E%E9%A1%B9%E7%9B%AE%E9%83%A8%E7%BD%B2%E4%B8%8A%E7%BA%BF/" title="关于项目部署上线"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="关于项目部署上线"/></a><div class="content"><a class="title" href="/2026/09/01/%E9%9B%80%E8%B7%83/%E5%85%B3%E4%BA%8E%E9%A1%B9%E7%9B%AE%E9%83%A8%E7%BD%B2%E4%B8%8A%E7%BA%BF/" title="关于项目部署上线">关于项目部署上线</a><time datetime="2026-09-01T09:10:15.000Z" title="发表于 2026-09-01 17:10:15">2026-09-01</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/08/26/%E9%9B%80%E8%B7%83/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="计数模块前后端联调"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="计数模块前后端联调"/></a><div class="content"><a class="title" href="/2026/08/26/%E9%9B%80%E8%B7%83/%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="计数模块前后端联调">计数模块前后端联调</a><time datetime="2026-08-26T04:26:35.000Z" title="发表于 2026-08-26 12:26:35">2026-08-26</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/08/24/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃计数，关系模块2"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃计数，关系模块2"/></a><div class="content"><a class="title" href="/2026/08/24/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃计数，关系模块2">雀跃计数，关系模块2</a><time datetime="2026-08-24T02:20:41.000Z" title="发表于 2026-08-24 10:20:41">2026-08-24</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/./img/3.jpg);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By specialweek4</span></div><div class="footer_custom_text">❀写下我想说的话，听我想听的歌。🎸🎶❀</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.4"></script></div></div></body></html>

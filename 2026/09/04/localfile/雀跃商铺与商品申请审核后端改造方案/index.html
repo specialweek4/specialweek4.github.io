@@ -1,0 +1,956 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>店铺、商品创建2 | specialweek4博客</title><meta name="author" content="specialweek4"><meta name="copyright" content="specialweek4"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="雀跃：商铺、商品与优惠券申请审核后端改造方案 本文只描述改造方案和示例代码，不修改当前项目源代码。 采用“独立申请表”方案：商铺和商品申请先持久化到 MySQL 申请表，管理员审核通过后在事务中生成正式记录；普通优惠券和秒杀优惠券均由已审核店铺的店主自主创建，直接写入正式优惠券表。Redis 只用于草稿、缓存和防重复提交。  一、业务边界把“商品”和“优惠券”作为两个独立业务对象：  商品：店铺实">
+<meta property="og:type" content="article">
+<meta property="og:title" content="店铺、商品创建2">
+<meta property="og:url" content="https://specialweek4.github.io/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88/index.html">
+<meta property="og:site_name" content="specialweek4博客">
+<meta property="og:description" content="雀跃：商铺、商品与优惠券申请审核后端改造方案 本文只描述改造方案和示例代码，不修改当前项目源代码。 采用“独立申请表”方案：商铺和商品申请先持久化到 MySQL 申请表，管理员审核通过后在事务中生成正式记录；普通优惠券和秒杀优惠券均由已审核店铺的店主自主创建，直接写入正式优惠券表。Redis 只用于草稿、缓存和防重复提交。  一、业务边界把“商品”和“优惠券”作为两个独立业务对象：  商品：店铺实">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://specialweek4.github.io/img/3.jpg">
+<meta property="article:published_time" content="2026-09-04T07:50:49.000Z">
+<meta property="article:modified_time" content="2026-09-04T09:55:11.908Z">
+<meta property="article:author" content="specialweek4">
+<meta property="article:tag" content="local">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://specialweek4.github.io/img/3.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "店铺、商品创建2",
+  "url": "https://specialweek4.github.io/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88/",
+  "image": "https://specialweek4.github.io/img/3.jpg",
+  "datePublished": "2026-09-04T07:50:49.000Z",
+  "dateModified": "2026-09-04T09:55:11.908Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "specialweek4",
+      "url": "https://specialweek4.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://specialweek4.github.io/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '店铺、商品创建2',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/./img/14.png);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">67</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">22</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">15</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/./img/3.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">specialweek4博客</span></a><a class="nav-page-title" href="/"><span class="site-name">店铺、商品创建2</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">店铺、商品创建2</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-04T07:50:49.000Z" title="发表于 2026-09-04 15:50:49">2026-09-04</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-04T09:55:11.908Z" title="更新于 2026-09-04 17:55:11">2026-09-04</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/local/">local</a></span></div><div class="meta-secondline"></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="雀跃：商铺、商品与优惠券申请审核后端改造方案"><a href="#雀跃：商铺、商品与优惠券申请审核后端改造方案" class="headerlink" title="雀跃：商铺、商品与优惠券申请审核后端改造方案"></a>雀跃：商铺、商品与优惠券申请审核后端改造方案</h1><blockquote>
+<p>本文只描述改造方案和示例代码，不修改当前项目源代码。</p>
+<p>采用“独立申请表”方案：商铺和商品申请先持久化到 MySQL 申请表，管理员审核通过后在事务中生成正式记录；普通优惠券和秒杀优惠券均由已审核店铺的店主自主创建，直接写入正式优惠券表。Redis 只用于草稿、缓存和防重复提交。</p>
+</blockquote>
+<h2 id="一、业务边界"><a href="#一、业务边界" class="headerlink" title="一、业务边界"></a>一、业务边界</h2><p>把“商品”和“优惠券”作为两个独立业务对象：</p>
+<ul>
+<li><strong>商品</strong>：店铺实际售卖的商品，例如奶茶、套餐、蛋糕；有名称、图片、价格、库存、上下架状态。</li>
+<li><strong>优惠券</strong>：店铺发放的代金券&#x2F;折扣券，对应当前项目的 <code>tb_voucher</code>；有支付金额、抵扣金额、使用规则、有效期和优惠券状态。</li>
+</ul>
+<p>商品和优惠券分开建模；审核策略为：商铺和商品必须管理员审核，普通优惠券和秒杀优惠券均由商家自主发布：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">用户提交商品资料       商家创建普通优惠券       商家创建秒杀券</span><br><span class="line">       │                       │                       │</span><br><span class="line">       ▼                       ▼                       ▼</span><br><span class="line">tb_product_application   直接写tb_voucher       事务写tb_voucher + tb_seckill_voucher</span><br><span class="line">       │</span><br><span class="line">       ├─拒绝：保留申请记录</span><br><span class="line">       └─通过：创建tb_product</span><br></pre></td></tr></table></figure>
+
+<p>优惠券默认属于店铺，不强制绑定某个商品。若以后需要“仅适用于某件商品”，再给优惠券增加可选 <code>product_id</code>，但仍不把优惠券和商品合并成一张表。</p>
+<h2 id="二、当前项目与改造目标"><a href="#二、当前项目与改造目标" class="headerlink" title="二、当前项目与改造目标"></a>二、当前项目与改造目标</h2><p>当前项目已有：</p>
+<ul>
+<li><code>tb_shop</code>&#x2F;<code>Shop</code>，以及直接写入的 <code>POST /shop</code>；</li>
+<li><code>tb_voucher</code>&#x2F;<code>Voucher</code>，当前代表优惠券；</li>
+<li><code>GET /shop/**</code>、<code>GET /voucher/**</code> 公开查询；</li>
+<li>JWT 的 <code>sub</code> 为用户 id；</li>
+<li>Redis 店铺详情缓存。</li>
+</ul>
+<p>当前没有商品表，因此需要新增商品领域。改造后：</p>
+<ol>
+<li>普通用户不能直接写商铺、商品正式表；</li>
+<li>商铺和商品使用独立申请表，审核通过后才创建正式记录；</li>
+<li>普通优惠券由已审核店铺的店主直接创建；</li>
+<li>秒杀优惠券由已审核店铺的店主自主创建，不经过管理员审核；</li>
+<li>店主只能操作自己店铺下的申请和正式商品&#x2F;优惠券；</li>
+<li>客户端只查询正式表中已上架的数据；</li>
+<li><code>tb_voucher.status</code> 继续只表示优惠券销售状态，不表示审核状态。</li>
+</ol>
+<h2 id="三、数据库设计"><a href="#三、数据库设计" class="headerlink" title="三、数据库设计"></a>三、数据库设计</h2><h3 id="1-用户角色"><a href="#1-用户角色" class="headerlink" title="1. 用户角色"></a>1. 用户角色</h3><p>当前 <code>tb_user</code> 没有角色字段，最小实现可增加：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">ALTER TABLE</span> tb_user</span><br><span class="line">    <span class="keyword">ADD</span> <span class="keyword">COLUMN</span> role TINYINT UNSIGNED <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span></span><br><span class="line">        COMMENT <span class="string">&#x27;角色：0普通用户，1商家，9管理员&#x27;</span> AFTER password,</span><br><span class="line">    <span class="keyword">ADD</span> KEY idx_user_role (role);</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">class</span> <span class="title class_">UserRoles</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">int</span> <span class="variable">USER</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">int</span> <span class="variable">MERCHANT</span> <span class="operator">=</span> <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">int</span> <span class="variable">ADMIN</span> <span class="operator">=</span> <span class="number">9</span>;</span><br><span class="line">    <span class="keyword">private</span> <span class="title function_">UserRoles</span><span class="params">()</span> &#123;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-正式商铺表-tb-shop"><a href="#2-正式商铺表-tb-shop" class="headerlink" title="2. 正式商铺表 tb_shop"></a>2. 正式商铺表 <code>tb_shop</code></h3><p>方案二下，<code>tb_shop</code> 只保存审核通过的正式商铺。增加店主字段，并将正式记录的坐标保存为审核时补齐后的有效坐标：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">ALTER TABLE</span> tb_shop</span><br><span class="line">    <span class="keyword">ADD</span> <span class="keyword">COLUMN</span> owner_user_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NULL</span></span><br><span class="line">        COMMENT <span class="string">&#x27;店主用户id&#x27;</span> AFTER id,</span><br><span class="line">    <span class="keyword">ADD</span> <span class="keyword">COLUMN</span> business_status TINYINT UNSIGNED <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">1</span></span><br><span class="line">        COMMENT <span class="string">&#x27;1营业中，2暂停营业，3永久关闭&#x27;</span> AFTER owner_user_id,</span><br><span class="line">    MODIFY <span class="keyword">COLUMN</span> x <span class="type">DECIMAL</span>(<span class="number">10</span>,<span class="number">7</span>) <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;经度&#x27;</span>,</span><br><span class="line">    MODIFY <span class="keyword">COLUMN</span> y <span class="type">DECIMAL</span>(<span class="number">10</span>,<span class="number">7</span>) <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;纬度&#x27;</span>,</span><br><span class="line">    <span class="keyword">ADD</span> KEY idx_shop_owner (owner_user_id);</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-商铺申请表-tb-shop-application"><a href="#3-商铺申请表-tb-shop-application" class="headerlink" title="3. 商铺申请表 tb_shop_application"></a>3. 商铺申请表 <code>tb_shop_application</code></h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> tb_shop_application (</span><br><span class="line">    id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span> AUTO_INCREMENT,</span><br><span class="line">    applicant_user_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span>,</span><br><span class="line">    name <span class="type">VARCHAR</span>(<span class="number">128</span>) <span class="keyword">NOT NULL</span>,</span><br><span class="line">    type_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span>,</span><br><span class="line">    images <span class="type">VARCHAR</span>(<span class="number">1024</span>) <span class="keyword">NOT NULL</span>,</span><br><span class="line">    area <span class="type">VARCHAR</span>(<span class="number">128</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    address <span class="type">VARCHAR</span>(<span class="number">255</span>) <span class="keyword">NOT NULL</span>,</span><br><span class="line">    x <span class="type">DECIMAL</span>(<span class="number">10</span>,<span class="number">7</span>) <span class="keyword">NULL</span> COMMENT <span class="string">&#x27;经度，由审核人员补齐&#x27;</span>,</span><br><span class="line">    y <span class="type">DECIMAL</span>(<span class="number">10</span>,<span class="number">7</span>) <span class="keyword">NULL</span> COMMENT <span class="string">&#x27;纬度，由审核人员补齐&#x27;</span>,</span><br><span class="line">    avg_price <span class="type">BIGINT</span> UNSIGNED <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    open_hours <span class="type">VARCHAR</span>(<span class="number">32</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    audit_status TINYINT UNSIGNED <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span></span><br><span class="line">        COMMENT <span class="string">&#x27;0待审核，1通过，2拒绝&#x27;</span>,</span><br><span class="line">    reject_reason <span class="type">VARCHAR</span>(<span class="number">512</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    audited_by <span class="type">BIGINT</span> UNSIGNED <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    audited_time <span class="type">TIMESTAMP</span> <span class="keyword">NULL</span> <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    approved_shop_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    create_time <span class="type">TIMESTAMP</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="built_in">CURRENT_TIMESTAMP</span>,</span><br><span class="line">    update_time <span class="type">TIMESTAMP</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="built_in">CURRENT_TIMESTAMP</span> <span class="keyword">ON</span> <span class="keyword">UPDATE</span> <span class="built_in">CURRENT_TIMESTAMP</span>,</span><br><span class="line">    <span class="keyword">PRIMARY KEY</span> (id),</span><br><span class="line">    KEY idx_shop_applicant_status (applicant_user_id, audit_status, create_time),</span><br><span class="line">    KEY idx_shop_application_status (audit_status, create_time)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB <span class="keyword">DEFAULT</span> CHARSET<span class="operator">=</span>utf8mb4;</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-正式商品表-tb-product（新增）"><a href="#4-正式商品表-tb-product（新增）" class="headerlink" title="4. 正式商品表 tb_product（新增）"></a>4. 正式商品表 <code>tb_product</code>（新增）</h3><p>商品和优惠券分表，商品只保存审核通过后的正式数据：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> tb_product (</span><br><span class="line">    id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span> AUTO_INCREMENT,</span><br><span class="line">    shop_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span>,</span><br><span class="line">    created_by <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;店主用户id&#x27;</span>,</span><br><span class="line">    name <span class="type">VARCHAR</span>(<span class="number">128</span>) <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;商品名称&#x27;</span>,</span><br><span class="line">    description <span class="type">VARCHAR</span>(<span class="number">1024</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span> COMMENT <span class="string">&#x27;商品描述&#x27;</span>,</span><br><span class="line">    images <span class="type">VARCHAR</span>(<span class="number">2048</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span> COMMENT <span class="string">&#x27;商品图片，逗号分隔&#x27;</span>,</span><br><span class="line">    price <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;售价，单位分&#x27;</span>,</span><br><span class="line">    stock <span class="type">INT</span> UNSIGNED <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>,</span><br><span class="line">    status TINYINT UNSIGNED <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">2</span></span><br><span class="line">        COMMENT <span class="string">&#x27;1上架，2下架，3售罄&#x27;</span>,</span><br><span class="line">    create_time <span class="type">TIMESTAMP</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="built_in">CURRENT_TIMESTAMP</span>,</span><br><span class="line">    update_time <span class="type">TIMESTAMP</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="built_in">CURRENT_TIMESTAMP</span> <span class="keyword">ON</span> <span class="keyword">UPDATE</span> <span class="built_in">CURRENT_TIMESTAMP</span>,</span><br><span class="line">    <span class="keyword">PRIMARY KEY</span> (id),</span><br><span class="line">    KEY idx_product_shop_status (shop_id, status),</span><br><span class="line">    KEY idx_product_creator (created_by)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB <span class="keyword">DEFAULT</span> CHARSET<span class="operator">=</span>utf8mb4;</span><br></pre></td></tr></table></figure>
+
+<p><code>tb_product</code> 不增加 <code>audit_status</code>，因为待审核商品尚未进入正式表。</p>
+<h3 id="5-商品申请表-tb-product-application（新增）"><a href="#5-商品申请表-tb-product-application（新增）" class="headerlink" title="5. 商品申请表 tb_product_application（新增）"></a>5. 商品申请表 <code>tb_product_application</code>（新增）</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> tb_product_application (</span><br><span class="line">    id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span> AUTO_INCREMENT,</span><br><span class="line">    applicant_user_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span>,</span><br><span class="line">    shop_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;正式店铺id&#x27;</span>,</span><br><span class="line">    name <span class="type">VARCHAR</span>(<span class="number">128</span>) <span class="keyword">NOT NULL</span>,</span><br><span class="line">    description <span class="type">VARCHAR</span>(<span class="number">1024</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    images <span class="type">VARCHAR</span>(<span class="number">2048</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    price <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;售价，单位分&#x27;</span>,</span><br><span class="line">    stock <span class="type">INT</span> UNSIGNED <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span>,</span><br><span class="line">    audit_status TINYINT UNSIGNED <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="number">0</span></span><br><span class="line">        COMMENT <span class="string">&#x27;0待审核，1通过，2拒绝&#x27;</span>,</span><br><span class="line">    reject_reason <span class="type">VARCHAR</span>(<span class="number">512</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    audited_by <span class="type">BIGINT</span> UNSIGNED <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    audited_time <span class="type">TIMESTAMP</span> <span class="keyword">NULL</span> <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    approved_product_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    create_time <span class="type">TIMESTAMP</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="built_in">CURRENT_TIMESTAMP</span>,</span><br><span class="line">    update_time <span class="type">TIMESTAMP</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="built_in">CURRENT_TIMESTAMP</span> <span class="keyword">ON</span> <span class="keyword">UPDATE</span> <span class="built_in">CURRENT_TIMESTAMP</span>,</span><br><span class="line">    <span class="keyword">PRIMARY KEY</span> (id),</span><br><span class="line">    KEY idx_product_applicant_status (applicant_user_id, audit_status, create_time),</span><br><span class="line">    KEY idx_product_application_status (audit_status, create_time),</span><br><span class="line">    KEY idx_product_application_shop (shop_id, audit_status)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB <span class="keyword">DEFAULT</span> CHARSET<span class="operator">=</span>utf8mb4;</span><br></pre></td></tr></table></figure>
+
+<p>商品申请必须关联已审核通过的正式店铺；不能在商铺申请尚未通过时提交商品申请。</p>
+<h3 id="6-正式优惠券表-tb-voucher"><a href="#6-正式优惠券表-tb-voucher" class="headerlink" title="6. 正式优惠券表 tb_voucher"></a>6. 正式优惠券表 <code>tb_voucher</code></h3><p>当前 <code>tb_voucher</code> 就是优惠券正式表，保留原字段和 <code>status</code> 含义：1 上架、2 下架、3 过期。普通优惠券审核规则为“店主自主发布”，但必须经过店铺归属、金额、有效期等服务端校验。建议增加创建人：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">ALTER TABLE</span> tb_voucher</span><br><span class="line">    <span class="keyword">ADD</span> <span class="keyword">COLUMN</span> created_by <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NULL</span></span><br><span class="line">        COMMENT <span class="string">&#x27;创建优惠券的店主用户id&#x27;</span> AFTER shop_id,</span><br><span class="line">    <span class="keyword">ADD</span> KEY idx_voucher_creator (created_by);</span><br></pre></td></tr></table></figure>
+
+<p>优惠券默认只关联 <code>shop_id</code>。如果需要商品专属券，可再增加可选 <code>product_id</code>：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">ALTER TABLE</span> tb_voucher</span><br><span class="line">    <span class="keyword">ADD</span> <span class="keyword">COLUMN</span> product_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NULL</span> COMMENT <span class="string">&#x27;可选，适用商品id&#x27;</span>,</span><br><span class="line">    <span class="keyword">ADD</span> KEY idx_voucher_product (product_id);</span><br></pre></td></tr></table></figure>
+
+<h3 id="7-审核历史表（推荐）"><a href="#7-审核历史表（推荐）" class="headerlink" title="7. 审核历史表（推荐）"></a>7. 审核历史表（推荐）</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> tb_audit_record (</span><br><span class="line">    id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span> AUTO_INCREMENT,</span><br><span class="line">    target_type <span class="type">VARCHAR</span>(<span class="number">40</span>) <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;SHOP/PRODUCT&#x27;</span>,</span><br><span class="line">    target_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span>,</span><br><span class="line">    from_status TINYINT UNSIGNED <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    to_status TINYINT UNSIGNED <span class="keyword">NOT NULL</span>,</span><br><span class="line">    operator_user_id <span class="type">BIGINT</span> UNSIGNED <span class="keyword">NOT NULL</span>,</span><br><span class="line">    reason <span class="type">VARCHAR</span>(<span class="number">512</span>) <span class="keyword">DEFAULT</span> <span class="keyword">NULL</span>,</span><br><span class="line">    create_time <span class="type">TIMESTAMP</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="built_in">CURRENT_TIMESTAMP</span>,</span><br><span class="line">    <span class="keyword">PRIMARY KEY</span> (id),</span><br><span class="line">    KEY idx_audit_target (target_type, target_id, create_time)</span><br><span class="line">) ENGINE<span class="operator">=</span>InnoDB <span class="keyword">DEFAULT</span> CHARSET<span class="operator">=</span>utf8mb4;</span><br></pre></td></tr></table></figure>
+
+<h2 id="四、认证与权限"><a href="#四、认证与权限" class="headerlink" title="四、认证与权限"></a>四、认证与权限</h2><p>登录和刷新 token 时将用户角色写入 JWT：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">.claim(<span class="string">&quot;role&quot;</span>, user.getRole())</span><br></pre></td></tr></table></figure>
+
+<p>在 <code>SecurityConfig</code> 中把 role claim 转成 <code>ROLE_ADMIN</code>、<code>ROLE_MERCHANT</code>，并启用 <code>@EnableMethodSecurity</code>。路径权限建议：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">.requestMatchers(<span class="string">&quot;/merchant/**&quot;</span>).hasAnyRole(<span class="string">&quot;MERCHANT&quot;</span>, <span class="string">&quot;ADMIN&quot;</span>)</span><br><span class="line">.requestMatchers(<span class="string">&quot;/admin/**&quot;</span>).hasRole(<span class="string">&quot;ADMIN&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>角色只能说明用户类型；具体店铺、商品和优惠券操作仍必须校验店主归属。</p>
+<h2 id="五、商铺申请流程"><a href="#五、商铺申请流程" class="headerlink" title="五、商铺申请流程"></a>五、商铺申请流程</h2><h3 id="1-DTO-和接口"><a href="#1-DTO-和接口" class="headerlink" title="1. DTO 和接口"></a>1. DTO 和接口</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">ShopApplyRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">    @NotBlank @Size(max = 128)</span> String name,</span><br><span class="line">    <span class="meta">@NotNull</span> Long typeId,</span><br><span class="line">    <span class="meta">@NotBlank</span> <span class="meta">@Size(max = 1024)</span> String images,</span><br><span class="line">    <span class="meta">@Size(max = 128)</span> String area,</span><br><span class="line">    <span class="meta">@NotBlank</span> <span class="meta">@Size(max = 255)</span> String address,</span><br><span class="line">    <span class="meta">@PositiveOrZero</span> Long avgPrice,</span><br><span class="line">    <span class="meta">@Size(max = 32)</span> String openHours</span><br><span class="line">) &#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">ShopAuditRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">    @NotNull Boolean approved,</span></span><br><span class="line"><span class="params">    @DecimalMin(&quot;-180&quot;)</span> <span class="meta">@DecimalMax(&quot;180&quot;)</span> BigDecimal x,</span><br><span class="line">    <span class="meta">@DecimalMin(&quot;-90&quot;)</span> <span class="meta">@DecimalMax(&quot;90&quot;)</span> BigDecimal y,</span><br><span class="line">    <span class="meta">@Size(max = 512)</span> String reason</span><br><span class="line">) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>申请人只填写地址，不需要手动填写经纬度。管理员审核通过时必须补齐并校验 <code>x/y</code>；拒绝申请时可以不填写坐标。</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>权限</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/merchant/shop-applications</code></td>
+<td>登录用户</td>
+<td>提交商铺申请</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/merchant/shop-applications/mine</code></td>
+<td>登录用户</td>
+<td>查看自己的申请</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/merchant/shop-applications/{id}</code></td>
+<td>申请人</td>
+<td>修改待审核&#x2F;已拒绝申请</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/admin/shop-applications</code></td>
+<td>管理员</td>
+<td>分页查看申请</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/admin/shop-applications/{id}/audit</code></td>
+<td>管理员</td>
+<td>通过或拒绝</td>
+</tr>
+</tbody></table>
+<h3 id="2-提交和审核"><a href="#2-提交和审核" class="headerlink" title="2. 提交和审核"></a>2. 提交和审核</h3><p>提交申请只插入 <code>tb_shop_application</code>，不调用 <code>shopService.save()</code>。审核通过时在一个 <code>@Transactional</code> 方法中：</p>
+<ol>
+<li>锁定并确认申请仍为待审核；</li>
+<li>管理员根据地址补齐经纬度，并校验经度范围 <code>[-180,180]</code>、纬度范围 <code>[-90,90]</code>；</li>
+<li>坐标缺失或无效时不能审核通过，只能退回补充或拒绝；</li>
+<li>创建正式 <code>tb_shop</code>，写入审核补齐的 <code>x/y</code>，并初始化 <code>sold/comments/score</code>；</li>
+<li>将生成的 <code>shop.id</code> 回写 <code>approved_shop_id</code>；</li>
+<li>将申请状态改为已通过；</li>
+<li>必要时写 <code>tb_audit_record</code>。</li>
+</ol>
+<p>审核更新必须带旧状态条件，防止重复生成正式店铺：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">UPDATE</span> tb_shop_application</span><br><span class="line"><span class="keyword">SET</span> audit_status <span class="operator">=</span> <span class="number">1</span>, x <span class="operator">=</span> #&#123;x&#125;, y <span class="operator">=</span> #&#123;y&#125;,</span><br><span class="line">    audited_by <span class="operator">=</span> #&#123;adminId&#125;, audited_time <span class="operator">=</span> NOW(),</span><br><span class="line">    approved_shop_id <span class="operator">=</span> #&#123;shopId&#125;, reject_reason <span class="operator">=</span> <span class="keyword">NULL</span></span><br><span class="line"><span class="keyword">WHERE</span> id <span class="operator">=</span> #&#123;id&#125; <span class="keyword">AND</span> audit_status <span class="operator">=</span> <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+
+<p>正式商铺创建时使用同一组审核坐标：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">shop.setX(req.x().doubleValue())</span><br><span class="line">    .setY(req.y().doubleValue());</span><br></pre></td></tr></table></figure>
+
+<p>实际实现建议让实体字段使用 <code>BigDecimal</code>，避免经纬度在 Java <code>double</code> 与数据库 <code>DECIMAL</code> 之间反复转换。</p>
+<p>拒绝时更新为 <code>audit_status = 2</code> 并要求填写 <code>reject_reason</code>。待审核或已拒绝申请允许申请人修改；已通过申请对应正式商铺，后续资料变更应走正式商铺编辑流程。</p>
+<h2 id="六、商品申请流程（独立于优惠券）"><a href="#六、商品申请流程（独立于优惠券）" class="headerlink" title="六、商品申请流程（独立于优惠券）"></a>六、商品申请流程（独立于优惠券）</h2><h3 id="1-DTO"><a href="#1-DTO" class="headerlink" title="1. DTO"></a>1. DTO</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">ProductApplyRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">    @NotBlank @Size(max = 128)</span> String name,</span><br><span class="line">    <span class="meta">@Size(max = 1024)</span> String description,</span><br><span class="line">    <span class="meta">@Size(max = 2048)</span> String images,</span><br><span class="line">    <span class="meta">@NotNull</span> <span class="meta">@PositiveOrZero</span> Long price,</span><br><span class="line">    <span class="meta">@NotNull</span> <span class="meta">@PositiveOrZero</span> Integer stock</span><br><span class="line">) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-接口"><a href="#2-接口" class="headerlink" title="2. 接口"></a>2. 接口</h3><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>权限</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/merchant/shops/{shopId}/product-applications</code></td>
+<td>店主</td>
+<td>提交商品申请</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/merchant/shops/{shopId}/product-applications/mine</code></td>
+<td>店主</td>
+<td>查看商品申请</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/merchant/product-applications/{id}</code></td>
+<td>申请人</td>
+<td>修改待审核&#x2F;已拒绝申请</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/admin/product-applications</code></td>
+<td>管理员</td>
+<td>分页查看申请</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/admin/product-applications/{id}/audit</code></td>
+<td>管理员</td>
+<td>通过或拒绝</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/merchant/products/{id}/status</code></td>
+<td>店主</td>
+<td>商品上架&#x2F;下架</td>
+</tr>
+</tbody></table>
+<h3 id="3-提交校验与审核通过"><a href="#3-提交校验与审核通过" class="headerlink" title="3. 提交校验与审核通过"></a>3. 提交校验与审核通过</h3><p>提交时先查询正式店铺并验证店主：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">Shop</span> <span class="variable">shop</span> <span class="operator">=</span> shopService.getById(shopId);</span><br><span class="line"><span class="keyword">if</span> (shop == <span class="literal">null</span>) <span class="keyword">return</span> Result.fail(<span class="string">&quot;商铺不存在&quot;</span>);</span><br><span class="line"><span class="keyword">if</span> (!Objects.equals(shop.getOwnerUserId(), userId) &amp;&amp; !isAdmin(userId)) &#123;</span><br><span class="line">    <span class="keyword">return</span> Result.fail(<span class="string">&quot;无权在该商铺发布商品&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后只写 <code>tb_product_application</code>。管理员通过后在事务内创建：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">Product</span> <span class="variable">product</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Product</span>()</span><br><span class="line">    .setShopId(app.getShopId())</span><br><span class="line">    .setCreatedBy(app.getApplicantUserId())</span><br><span class="line">    .setName(app.getName())</span><br><span class="line">    .setDescription(app.getDescription())</span><br><span class="line">    .setImages(app.getImages())</span><br><span class="line">    .setPrice(app.getPrice())</span><br><span class="line">    .setStock(app.getStock())</span><br><span class="line">    .setStatus(<span class="number">2</span>); <span class="comment">// 默认下架，店主确认后上架</span></span><br><span class="line">productMapper.insert(product);</span><br><span class="line">productApplicationMapper.approve(app.getId(), adminId, product.getId());</span><br></pre></td></tr></table></figure>
+
+<p>商品审核通过不会自动创建或修改任何优惠券；商品和优惠券完全独立。</p>
+<h2 id="七、优惠券流程（普通券和秒杀券均自主发布）"><a href="#七、优惠券流程（普通券和秒杀券均自主发布）" class="headerlink" title="七、优惠券流程（普通券和秒杀券均自主发布）"></a>七、优惠券流程（普通券和秒杀券均自主发布）</h2><h3 id="1-DTO-和接口-1"><a href="#1-DTO-和接口-1" class="headerlink" title="1. DTO 和接口"></a>1. DTO 和接口</h3><p>普通优惠券不需要提交管理员审核申请，仍应使用独立 DTO：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">VoucherCreateRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">    @NotBlank @Size(max = 255)</span> String title,</span><br><span class="line">    <span class="meta">@Size(max = 255)</span> String subTitle,</span><br><span class="line">    <span class="meta">@Size(max = 1024)</span> String rules,</span><br><span class="line">    <span class="meta">@NotNull</span> <span class="meta">@Positive</span> Long payValue,</span><br><span class="line">    <span class="meta">@NotNull</span> <span class="meta">@Positive</span> Long actualValue,</span><br><span class="line">    Long productId,</span><br><span class="line">    Integer status</span><br><span class="line">) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>路径</th>
+<th>权限</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/merchant/shops/{shopId}/vouchers</code></td>
+<td>店主</td>
+<td>创建普通优惠券（<code>type=0</code>）</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/merchant/vouchers/{id}/status</code></td>
+<td>店主</td>
+<td>普通优惠券上架&#x2F;下架</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/merchant/shops/{shopId}/seckill-vouchers</code></td>
+<td>店主</td>
+<td>创建秒杀优惠券（<code>type=1</code>）</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/merchant/vouchers/{id}/status</code></td>
+<td>店主</td>
+<td>秒杀优惠券上架&#x2F;下架</td>
+</tr>
+</tbody></table>
+<h3 id="1-普通优惠券直接创建"><a href="#1-普通优惠券直接创建" class="headerlink" title="1. 普通优惠券直接创建"></a>1. 普通优惠券直接创建</h3><p>服务端必须确认店铺存在、已审核通过，且当前用户是店主或管理员；如果 <code>productId</code> 不为空，还要确认商品属于该店铺且已审核通过。请求中的 <code>shopId</code> 使用路径参数，不能信任请求体。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">Voucher</span> <span class="variable">voucher</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Voucher</span>()</span><br><span class="line">    .setShopId(shopId)</span><br><span class="line">    .setCreatedBy(userId)</span><br><span class="line">    .setTitle(req.title().trim())</span><br><span class="line">    .setSubTitle(req.subTitle())</span><br><span class="line">    .setRules(req.rules())</span><br><span class="line">    .setPayValue(req.payValue())</span><br><span class="line">    .setActualValue(req.actualValue())</span><br><span class="line">    .setType(<span class="number">0</span>)</span><br><span class="line">    .setStatus(<span class="number">2</span>); <span class="comment">// 默认下架，店主确认后上架</span></span><br><span class="line">voucherService.save(voucher);</span><br></pre></td></tr></table></figure>
+
+<p>普通优惠券无需写申请表或等待管理员，但金额、折扣比例、有效期、使用规则、重复领取限制等必须做服务端校验，并保留管理员强制下架能力。</p>
+<h3 id="2-秒杀券直接创建"><a href="#2-秒杀券直接创建" class="headerlink" title="2. 秒杀券直接创建"></a>2. 秒杀券直接创建</h3><p>秒杀券不需要管理员审核，也不进入申请表。店主提交时必须校验店铺归属、商品归属、库存大于 0、开始时间早于结束时间、金额规则和时间范围，然后在同一个 <code>@Transactional</code> 方法中创建 <code>tb_voucher(type=1,status=2)</code> 与 <code>tb_seckill_voucher</code>。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">Voucher</span> <span class="variable">voucher</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Voucher</span>()</span><br><span class="line">        .setShopId(shopId).setCreatedBy(userId)</span><br><span class="line">        .setProductId(req.productId())</span><br><span class="line">        .setTitle(req.title().trim())</span><br><span class="line">        .setSubTitle(req.subTitle()).setRules(req.rules())</span><br><span class="line">        .setPayValue(req.payValue()).setActualValue(req.actualValue())</span><br><span class="line">        .setType(<span class="number">1</span>).setStatus(<span class="number">2</span>);</span><br><span class="line">voucherMapper.insert(voucher);</span><br><span class="line"></span><br><span class="line"><span class="type">SeckillVoucher</span> <span class="variable">seckill</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">SeckillVoucher</span>()</span><br><span class="line">        .setVoucherId(voucher.getId())</span><br><span class="line">        .setStock(req.stock())</span><br><span class="line">        .setBeginTime(req.beginTime())</span><br><span class="line">        .setEndTime(req.endTime());</span><br><span class="line">seckillVoucherMapper.insert(seckill);</span><br></pre></td></tr></table></figure>
+
+<p>创建失败时事务整体回滚，不能留下只有 <code>tb_voucher</code> 没有秒杀库存的半成品。管理员仍保留强制下架和风控能力。</p>
+<h2 id="八、客户端公开查询"><a href="#八、客户端公开查询" class="headerlink" title="八、客户端公开查询"></a>八、客户端公开查询</h2><p>客户端只查询正式表，因此申请表中的待审核和拒绝数据天然不可见。</p>
+<h3 id="商品"><a href="#商品" class="headerlink" title="商品"></a>商品</h3><p>新增公开接口：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">GET /product/list/&#123;shopId&#125;</span><br><span class="line">GET /product/&#123;id&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> id, shop_id, name, description, images, price, stock</span><br><span class="line"><span class="keyword">FROM</span> tb_product</span><br><span class="line"><span class="keyword">WHERE</span> shop_id <span class="operator">=</span> #&#123;shopId&#125; <span class="keyword">AND</span> status <span class="operator">=</span> <span class="number">1</span></span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> create_time <span class="keyword">DESC</span>;</span><br></pre></td></tr></table></figure>
+
+<h3 id="优惠券"><a href="#优惠券" class="headerlink" title="优惠券"></a>优惠券</h3><p>现有 <code>GET /voucher/list/{shopId}</code> 继续只查正式且上架的优惠券，建议联合正式店铺：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> v.id, v.shop_id, v.product_id, v.title, v.sub_title,</span><br><span class="line">       v.rules, v.pay_value, v.actual_value, v.type, v.status,</span><br><span class="line">       v.create_time, v.update_time</span><br><span class="line"><span class="keyword">FROM</span> tb_voucher v</span><br><span class="line"><span class="keyword">JOIN</span> tb_shop s <span class="keyword">ON</span> s.id <span class="operator">=</span> v.shop_id</span><br><span class="line"><span class="keyword">WHERE</span> v.shop_id <span class="operator">=</span> #&#123;shopId&#125; <span class="keyword">AND</span> v.status <span class="operator">=</span> <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+
+<p>如果是商品专属券，还要确认对应商品仍为 <code>status = 1</code>。</p>
+<p>原有 <code>POST /shop</code> 必须删除、改为商铺申请入口或管理员专用；原有 <code>POST /voucher</code>、<code>POST /voucher/seckill</code> 应改为店主专用 DTO 接口，分别创建普通券和秒杀券，不能直接接收数据库实体。</p>
+<h2 id="九、Redis-的正确使用方式"><a href="#九、Redis-的正确使用方式" class="headerlink" title="九、Redis 的正确使用方式"></a>九、Redis 的正确使用方式</h2><p>Redis 可用于：</p>
+<ul>
+<li><code>shop:application:draft:{userId}</code>、<code>product:application:draft:{userId}:{shopId}</code>、<code>voucher:draft:{userId}:{shopId}</code> 草稿；</li>
+<li>提交锁，防止重复点击；</li>
+<li>正式店铺、商品和优惠券列表缓存。</li>
+</ul>
+<p>提交成功后以申请表为唯一事实来源，草稿可以删除。不要把完整申请只放 Redis 等待审核。</p>
+<p>审核通过后清理对应正式数据缓存：店铺详情&#x2F;列表、商品列表、优惠券列表。</p>
+<h2 id="十、建议新增或调整的代码文件"><a href="#十、建议新增或调整的代码文件" class="headerlink" title="十、建议新增或调整的代码文件"></a>十、建议新增或调整的代码文件</h2><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line">src/main/java/com/specialweek/user/domain/User.java</span><br><span class="line">src/main/java/com/specialweek/auth/token/JwtService.java</span><br><span class="line">src/main/java/com/specialweek/auth/config/SecurityConfig.java</span><br><span class="line">src/main/java/com/specialweek/QueYueApplication.java                       # 扩展 MapperScan</span><br><span class="line"></span><br><span class="line">src/main/java/com/specialweek/shop/domain/Shop.java                 # ownerUserId</span><br><span class="line">src/main/java/com/specialweek/shop/domain/ShopApplication.java</span><br><span class="line">src/main/java/com/specialweek/shop/api/dto/ShopApplyRequest.java</span><br><span class="line">src/main/java/com/specialweek/shop/api/MerchantShopApplicationController.java</span><br><span class="line">src/main/java/com/specialweek/shop/api/AdminShopApplicationController.java</span><br><span class="line">src/main/java/com/specialweek/shop/service/ShopApplicationService.java</span><br><span class="line">src/main/java/com/specialweek/shop/mapper/ShopApplicationMapper.java</span><br><span class="line"></span><br><span class="line">src/main/java/com/specialweek/product/domain/Product.java            # 新增</span><br><span class="line">src/main/java/com/specialweek/product/domain/ProductApplication.java  # 新增</span><br><span class="line">src/main/java/com/specialweek/product/api/dto/ProductApplyRequest.java</span><br><span class="line">src/main/java/com/specialweek/product/api/MerchantProductApplicationController.java</span><br><span class="line">src/main/java/com/specialweek/product/api/AdminProductApplicationController.java</span><br><span class="line">src/main/java/com/specialweek/product/service/ProductApplicationService.java</span><br><span class="line">src/main/java/com/specialweek/product/mapper/ProductApplicationMapper.java</span><br><span class="line"></span><br><span class="line">src/main/java/com/specialweek/voucher/domain/Voucher.java</span><br><span class="line">src/main/java/com/specialweek/voucher/api/dto/VoucherCreateRequest.java             # 普通券</span><br><span class="line">src/main/java/com/specialweek/voucher/api/MerchantVoucherController.java            # 普通券自主创建</span><br><span class="line">src/main/java/com/specialweek/voucher/api/MerchantSeckillVoucherController.java      # 秒杀券自主创建</span><br><span class="line">src/main/java/com/specialweek/voucher/service/IVoucherService.java                 # 增加普通券创建方法</span><br><span class="line">src/main/java/com/specialweek/voucher/service/impl/VoucherServiceImpl.java           # 增加秒杀券创建校验</span><br></pre></td></tr></table></figure>
+
+<p>商品和优惠券必须有不同的实体、Mapper、Service、DTO、Controller；不要让 <code>Voucher</code> 继承或复用 <code>Product</code>。</p>
+<h2 id="十一、事务、并发和安全要求"><a href="#十一、事务、并发和安全要求" class="headerlink" title="十一、事务、并发和安全要求"></a>十一、事务、并发和安全要求</h2><ul>
+<li>商铺、商品申请审核通过使用 <code>@Transactional</code>；普通券和秒杀券创建也应使用事务；</li>
+<li>申请人 id 从 JWT 获取，不能由请求体传入；</li>
+<li>商品&#x2F;优惠券通过 <code>shop_id</code> 反查店主，防止跨店操作；</li>
+<li>优惠券指定 <code>product_id</code> 时校验商品属于同一店铺且已审核通过；</li>
+<li>审核通过前不创建正式商铺或商品；普通券和秒杀券按服务端校验后直接创建；</li>
+<li>商品库存、优惠券库存和价格做服务端校验；</li>
+<li>正式表的统计字段、销售状态、创建时间不能由普通用户直接控制；</li>
+<li>记录商铺&#x2F;商品管理员审核人、时间、原因，必要时写入 <code>tb_audit_record</code>；</li>
+<li>普通券和秒杀券创建使用提交锁或业务幂等键，防止重复点击生成重复券。</li>
+</ul>
+<h2 id="十二、推荐实施顺序"><a href="#十二、推荐实施顺序" class="headerlink" title="十二、推荐实施顺序"></a>十二、推荐实施顺序</h2><ol>
+<li>增加 <code>tb_user.role</code>、<code>tb_shop.owner_user_id</code>；</li>
+<li>创建 <code>tb_shop_application</code>、<code>tb_product</code>、<code>tb_product_application</code>；</li>
+<li>增加 JWT role claim、Spring Security Authority 和管理员路径；</li>
+<li>实现商铺申请与审核；</li>
+<li>实现商品申请与审核，新增商品公开查询；</li>
+<li>实现普通优惠券和秒杀优惠券自主创建；</li>
+<li>实现店主独立的商品&#x2F;优惠券上架下架；</li>
+<li>接入缓存清理、审核日志和幂等控制；</li>
+<li>补充越权、重复审核、跨店、未审核不可见、商品券归属校验测试。</li>
+</ol>
+<h2 id="十三、结论"><a href="#十三、结论" class="headerlink" title="十三、结论"></a>十三、结论</h2><p>最终数据模型是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">tb_shop_application     --审核通过--&gt; tb_shop</span><br><span class="line">tb_product_application  --审核通过--&gt; tb_product</span><br><span class="line">普通优惠券创建              ---------&gt; tb_voucher</span><br><span class="line">秒杀优惠券创建              ---------&gt; tb_voucher (+ tb_seckill_voucher)</span><br></pre></td></tr></table></figure>
+
+<p>商品与优惠券各自拥有独立的领域模型和上下架状态。商铺和商品必须审核；普通优惠券和秒杀优惠券均由已审核店铺的店主自主发布，并通过服务端校验和事务保证数据完整性。优惠券可以属于店铺，也可以通过可选 <code>product_id</code> 指定适用商品，但不与商品合并。</p>
+<h2 id="十四、按文件落地的完整代码清单"><a href="#十四、按文件落地的完整代码清单" class="headerlink" title="十四、按文件落地的完整代码清单"></a>十四、按文件落地的完整代码清单</h2><p>下面按当前项目的包结构说明“新增什么、修改什么、放在哪里”。代码示例省略 Lombok 自动生成的 getter&#x2F;setter，但可以直接按现有项目的 <code>@Data</code>、<code>@Accessors(chain = true)</code> 风格实现。</p>
+<h3 id="A-修改现有用户和-JWT-文件"><a href="#A-修改现有用户和-JWT-文件" class="headerlink" title="A. 修改现有用户和 JWT 文件"></a>A. 修改现有用户和 JWT 文件</h3><h4 id="1-修改-src-main-java-com-specialweek-user-domain-User-java"><a href="#1-修改-src-main-java-com-specialweek-user-domain-User-java" class="headerlink" title="1. 修改 src/main/java/com/specialweek/user/domain/User.java"></a>1. 修改 <code>src/main/java/com/specialweek/user/domain/User.java</code></h4><p>在 <code>password</code> 字段后增加：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/** 0普通用户，1商家，9管理员 */</span></span><br><span class="line"><span class="keyword">private</span> <span class="type">Integer</span> <span class="variable">role</span> <span class="operator">=</span> <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+
+<p><code>User</code> 仍映射 <code>tb_user</code>，登录注册逻辑不需要改变；管理员账号通过数据库初始化或后台账号管理设置 <code>role = 9</code>。</p>
+<h4 id="2-修改-src-main-java-com-specialweek-auth-token-JwtService-java"><a href="#2-修改-src-main-java-com-specialweek-auth-token-JwtService-java" class="headerlink" title="2. 修改 src/main/java/com/specialweek/auth/token/JwtService.java"></a>2. 修改 <code>src/main/java/com/specialweek/auth/token/JwtService.java</code></h4><p>将 <code>issueTokenPair</code> 调用的 <code>encode</code> 增加 role 参数：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">String</span> <span class="variable">accessToken</span> <span class="operator">=</span> encode(</span><br><span class="line">        user.getId(), user.getRole(), <span class="string">&quot;access&quot;</span>, UUID.randomUUID().toString(),</span><br><span class="line">        issuedAt, accessExpiresAt</span><br><span class="line">);</span><br><span class="line"><span class="type">String</span> <span class="variable">refreshToken</span> <span class="operator">=</span> encode(</span><br><span class="line">        user.getId(), user.getRole(), <span class="string">&quot;refresh&quot;</span>, refreshTokenId,</span><br><span class="line">        issuedAt, refreshExpiresAt</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>并修改 <code>encode</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> String <span class="title function_">encode</span><span class="params">(</span></span><br><span class="line"><span class="params">        <span class="type">long</span> userId, Integer role, String tokenType, String tokenId,</span></span><br><span class="line"><span class="params">        Instant issuedAt, Instant expiresAt)</span> &#123;</span><br><span class="line">    <span class="type">JwsHeader</span> <span class="variable">header</span> <span class="operator">=</span> JwsHeader.with(SignatureAlgorithm.RS256)</span><br><span class="line">            .keyId(properties.getKeyId()).build();</span><br><span class="line">    <span class="type">JwtClaimsSet</span> <span class="variable">claims</span> <span class="operator">=</span> JwtClaimsSet.builder()</span><br><span class="line">            .issuer(properties.getIssuer())</span><br><span class="line">            .subject(String.valueOf(userId))</span><br><span class="line">            .id(tokenId)</span><br><span class="line">            .issuedAt(issuedAt)</span><br><span class="line">            .expiresAt(expiresAt)</span><br><span class="line">            .claim(<span class="string">&quot;uid&quot;</span>, userId)</span><br><span class="line">            .claim(<span class="string">&quot;role&quot;</span>, role == <span class="literal">null</span> ? <span class="number">0</span> : role)</span><br><span class="line">            .claim(<span class="string">&quot;token_type&quot;</span>, tokenType)</span><br><span class="line">            .build();</span><br><span class="line">    <span class="keyword">return</span> jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>刷新 token 时 <code>AuthService</code> 已经重新查询 <code>User</code> 后调用 <code>issueTokenPair</code>，因此角色变更会在刷新后生效。角色变更后如需立即失效旧 access token，需要额外做 token 版本或黑名单机制。</p>
+<h4 id="3-修改-src-main-java-com-specialweek-auth-config-SecurityConfig-java"><a href="#3-修改-src-main-java-com-specialweek-auth-config-SecurityConfig-java" class="headerlink" title="3. 修改 src/main/java/com/specialweek/auth/config/SecurityConfig.java"></a>3. 修改 <code>src/main/java/com/specialweek/auth/config/SecurityConfig.java</code></h4><p>增加 import：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;</span><br><span class="line"><span class="keyword">import</span> org.springframework.security.core.authority.SimpleGrantedAuthority;</span><br><span class="line"><span class="keyword">import</span> org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;</span><br></pre></td></tr></table></figure>
+
+<p>在配置类上增加：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@EnableMethodSecurity</span></span><br></pre></td></tr></table></figure>
+
+<p>在 <code>oauth2ResourceServer</code> 的 jwt 配置中加入 converter：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">JwtAuthenticationConverter</span> <span class="variable">converter</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">JwtAuthenticationConverter</span>();</span><br><span class="line">converter.setJwtGrantedAuthoritiesConverter(jwt -&gt; &#123;</span><br><span class="line">    <span class="type">Integer</span> <span class="variable">role</span> <span class="operator">=</span> jwt.getClaim(<span class="string">&quot;role&quot;</span>);</span><br><span class="line">    <span class="type">String</span> <span class="variable">authority</span> <span class="operator">=</span> <span class="keyword">switch</span> (role == <span class="literal">null</span> ? <span class="number">0</span> : role) &#123;</span><br><span class="line">        <span class="keyword">case</span> <span class="number">9</span> -&gt; <span class="string">&quot;ROLE_ADMIN&quot;</span>;</span><br><span class="line">        <span class="keyword">case</span> <span class="number">1</span> -&gt; <span class="string">&quot;ROLE_MERCHANT&quot;</span>;</span><br><span class="line">        <span class="keyword">default</span> -&gt; <span class="string">&quot;ROLE_USER&quot;</span>;</span><br><span class="line">    &#125;;</span><br><span class="line">    <span class="keyword">return</span> List.of(<span class="keyword">new</span> <span class="title class_">SimpleGrantedAuthority</span>(authority));</span><br><span class="line">&#125;);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 原来的 oauth2ResourceServer 配置改为：</span></span><br><span class="line">.oauth2ResourceServer(oauth -&gt; oauth</span><br><span class="line">        .jwt(jwt -&gt; jwt</span><br><span class="line">                .decoder(accessJwtDecoder)</span><br><span class="line">                .jwtAuthenticationConverter(converter))</span><br><span class="line">        .authenticationEntryPoint((request, response, exception) -&gt;</span><br><span class="line">                writeError(response, <span class="number">401</span>, <span class="string">&quot;access token 无效或已过期&quot;</span>)));</span><br></pre></td></tr></table></figure>
+
+<p>在 <code>authorizeHttpRequests</code> 的 <code>.anyRequest().authenticated()</code> 之前加入：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">.requestMatchers(<span class="string">&quot;/merchant/**&quot;</span>).hasAnyRole(<span class="string">&quot;MERCHANT&quot;</span>, <span class="string">&quot;ADMIN&quot;</span>)</span><br><span class="line">.requestMatchers(<span class="string">&quot;/admin/**&quot;</span>).hasRole(<span class="string">&quot;ADMIN&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>现有公开 GET 规则可以保留；写接口不要放进 <code>permitAll</code>。</p>
+<h4 id="4-修改-src-main-java-com-specialweek-QueYueApplication-java"><a href="#4-修改-src-main-java-com-specialweek-QueYueApplication-java" class="headerlink" title="4. 修改 src/main/java/com/specialweek/QueYueApplication.java"></a>4. 修改 <code>src/main/java/com/specialweek/QueYueApplication.java</code></h4><p>当前 <code>@MapperScan</code> 只扫描 user、shop、blog、follow、voucher。新增 product 和 audit 包后，改为：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@MapperScan(&#123;</span></span><br><span class="line"><span class="meta">        &quot;com.specialweek.user.mapper&quot;,</span></span><br><span class="line"><span class="meta">        &quot;com.specialweek.shop.mapper&quot;,</span></span><br><span class="line"><span class="meta">        &quot;com.specialweek.blog.mapper&quot;,</span></span><br><span class="line"><span class="meta">        &quot;com.specialweek.follow.mapper&quot;,</span></span><br><span class="line"><span class="meta">        &quot;com.specialweek.voucher.mapper&quot;,</span></span><br><span class="line"><span class="meta">        &quot;com.specialweek.product.mapper&quot;,</span></span><br><span class="line"><span class="meta">        &quot;com.specialweek.audit.mapper&quot;</span></span><br><span class="line"><span class="meta">&#125;)</span></span><br></pre></td></tr></table></figure>
+
+<p>如果每个新 Mapper 都加了 <code>@Mapper</code>，可以不扩展扫描列表，但建议保持项目现有的集中式 <code>@MapperScan</code> 方式。</p>
+<h3 id="B-修改正式商铺实体，新增商铺申请实体"><a href="#B-修改正式商铺实体，新增商铺申请实体" class="headerlink" title="B. 修改正式商铺实体，新增商铺申请实体"></a>B. 修改正式商铺实体，新增商铺申请实体</h3><h4 id="1-修改-src-main-java-com-specialweek-shop-domain-Shop-java"><a href="#1-修改-src-main-java-com-specialweek-shop-domain-Shop-java" class="headerlink" title="1. 修改 src/main/java/com/specialweek/shop/domain/Shop.java"></a>1. 修改 <code>src/main/java/com/specialweek/shop/domain/Shop.java</code></h4><p>增加字段：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> Long ownerUserId;</span><br></pre></td></tr></table></figure>
+
+<p>当前项目字段是 <code>Double x/y</code>。由于数据库改为 <code>DECIMAL(10,7)</code>，推荐同步改成：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> BigDecimal x;</span><br><span class="line"><span class="keyword">private</span> BigDecimal y;</span><br></pre></td></tr></table></figure>
+
+<p>并增加：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="type">Integer</span> <span class="variable">businessStatus</span> <span class="operator">=</span> <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+
+<p>如果暂时不想改 Java 类型，可以保留 <code>Double</code>，但不要在数据库继续使用 <code>DOUBLE UNSIGNED</code>。</p>
+<h4 id="2-新增-src-main-java-com-specialweek-shop-domain-ShopApplication-java"><a href="#2-新增-src-main-java-com-specialweek-shop-domain-ShopApplication-java" class="headerlink" title="2. 新增 src/main/java/com/specialweek/shop/domain/ShopApplication.java"></a>2. 新增 <code>src/main/java/com/specialweek/shop/domain/ShopApplication.java</code></h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="meta">@Accessors(chain = true)</span></span><br><span class="line"><span class="meta">@TableName(&quot;tb_shop_application&quot;)</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ShopApplication</span> <span class="keyword">implements</span> <span class="title class_">Serializable</span> &#123;</span><br><span class="line">    <span class="meta">@TableId(type = IdType.AUTO)</span></span><br><span class="line">    <span class="keyword">private</span> Long id;</span><br><span class="line">    <span class="keyword">private</span> Long applicantUserId;</span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line">    <span class="keyword">private</span> Long typeId;</span><br><span class="line">    <span class="keyword">private</span> String images;</span><br><span class="line">    <span class="keyword">private</span> String area;</span><br><span class="line">    <span class="keyword">private</span> String address;</span><br><span class="line">    <span class="keyword">private</span> BigDecimal x;</span><br><span class="line">    <span class="keyword">private</span> BigDecimal y;</span><br><span class="line">    <span class="keyword">private</span> Long avgPrice;</span><br><span class="line">    <span class="keyword">private</span> String openHours;</span><br><span class="line">    <span class="keyword">private</span> Integer auditStatus;</span><br><span class="line">    <span class="keyword">private</span> String rejectReason;</span><br><span class="line">    <span class="keyword">private</span> Long auditedBy;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime auditedTime;</span><br><span class="line">    <span class="keyword">private</span> Long approvedShopId;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime createTime;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime updateTime;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="C-商铺申请-DTO、Mapper、Service、Controller"><a href="#C-商铺申请-DTO、Mapper、Service、Controller" class="headerlink" title="C. 商铺申请 DTO、Mapper、Service、Controller"></a>C. 商铺申请 DTO、Mapper、Service、Controller</h3><h4 id="1-新增-shop-api-dto-ShopApplyRequest-java"><a href="#1-新增-shop-api-dto-ShopApplyRequest-java" class="headerlink" title="1. 新增 shop/api/dto/ShopApplyRequest.java"></a>1. 新增 <code>shop/api/dto/ShopApplyRequest.java</code></h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">ShopApplyRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">        @NotBlank @Size(max = 128)</span> String name,</span><br><span class="line">        <span class="meta">@NotNull</span> Long typeId,</span><br><span class="line">        <span class="meta">@NotBlank</span> <span class="meta">@Size(max = 1024)</span> String images,</span><br><span class="line">        <span class="meta">@Size(max = 128)</span> String area,</span><br><span class="line">        <span class="meta">@NotBlank</span> <span class="meta">@Size(max = 255)</span> String address,</span><br><span class="line">        <span class="meta">@PositiveOrZero</span> Long avgPrice,</span><br><span class="line">        <span class="meta">@Size(max = 32)</span> String openHours) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-新增-shop-api-dto-ShopAuditRequest-java"><a href="#2-新增-shop-api-dto-ShopAuditRequest-java" class="headerlink" title="2. 新增 shop/api/dto/ShopAuditRequest.java"></a>2. 新增 <code>shop/api/dto/ShopAuditRequest.java</code></h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">ShopAuditRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">        @NotNull Boolean approved,</span></span><br><span class="line"><span class="params">        @DecimalMin(&quot;-180&quot;)</span> <span class="meta">@DecimalMax(&quot;180&quot;)</span> BigDecimal x,</span><br><span class="line">        <span class="meta">@DecimalMin(&quot;-90&quot;)</span> <span class="meta">@DecimalMax(&quot;90&quot;)</span> BigDecimal y,</span><br><span class="line">        <span class="meta">@Size(max = 512)</span> String reason) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="3-新增-shop-mapper-ShopApplicationMapper-java"><a href="#3-新增-shop-mapper-ShopApplicationMapper-java" class="headerlink" title="3. 新增 shop/mapper/ShopApplicationMapper.java"></a>3. 新增 <code>shop/mapper/ShopApplicationMapper.java</code></h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Mapper</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">ShopApplicationMapper</span> <span class="keyword">extends</span> <span class="title class_">BaseMapper</span>&lt;ShopApplication&gt; &#123;</span><br><span class="line">    <span class="meta">@Update(&quot;&quot;&quot;</span></span><br><span class="line"><span class="meta">        UPDATE tb_shop_application</span></span><br><span class="line"><span class="meta">        SET audit_status = 1, x = #&#123;x&#125;, y = #&#123;y&#125;, audited_by = #&#123;adminId&#125;,</span></span><br><span class="line"><span class="meta">            audited_time = NOW(), approved_shop_id = #&#123;shopId&#125;, reject_reason = NULL</span></span><br><span class="line"><span class="meta">        WHERE id = #&#123;id&#125; AND audit_status = 0</span></span><br><span class="line"><span class="meta">        &quot;&quot;&quot;)</span></span><br><span class="line">    <span class="type">int</span> <span class="title function_">approve</span><span class="params">(<span class="meta">@Param(&quot;id&quot;)</span> <span class="type">long</span> id, <span class="meta">@Param(&quot;adminId&quot;)</span> <span class="type">long</span> adminId,</span></span><br><span class="line"><span class="params">                <span class="meta">@Param(&quot;shopId&quot;)</span> <span class="type">long</span> shopId, <span class="meta">@Param(&quot;x&quot;)</span> BigDecimal x,</span></span><br><span class="line"><span class="params">                <span class="meta">@Param(&quot;y&quot;)</span> BigDecimal y)</span>;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Update(&quot;&quot;&quot;</span></span><br><span class="line"><span class="meta">        UPDATE tb_shop_application</span></span><br><span class="line"><span class="meta">        SET audit_status = 2, audited_by = #&#123;adminId&#125;, audited_time = NOW(),</span></span><br><span class="line"><span class="meta">            reject_reason = #&#123;reason&#125;</span></span><br><span class="line"><span class="meta">        WHERE id = #&#123;id&#125; AND audit_status = 0</span></span><br><span class="line"><span class="meta">        &quot;&quot;&quot;)</span></span><br><span class="line">    <span class="type">int</span> <span class="title function_">reject</span><span class="params">(<span class="meta">@Param(&quot;id&quot;)</span> <span class="type">long</span> id, <span class="meta">@Param(&quot;adminId&quot;)</span> <span class="type">long</span> adminId,</span></span><br><span class="line"><span class="params">               <span class="meta">@Param(&quot;reason&quot;)</span> String reason)</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="4-新增-shop-service-ShopApplicationService-java"><a href="#4-新增-shop-service-ShopApplicationService-java" class="headerlink" title="4. 新增 shop/service/ShopApplicationService.java"></a>4. 新增 <code>shop/service/ShopApplicationService.java</code></h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">interface</span> <span class="title class_">ShopApplicationService</span> &#123;</span><br><span class="line">    Result <span class="title function_">apply</span><span class="params">(ShopApplyRequest request, <span class="type">long</span> userId)</span>;</span><br><span class="line">    Result <span class="title function_">mine</span><span class="params">(<span class="type">long</span> userId, <span class="type">int</span> current, <span class="type">int</span> size)</span>;</span><br><span class="line">    Result <span class="title function_">audit</span><span class="params">(<span class="type">long</span> id, ShopAuditRequest request, <span class="type">long</span> adminId)</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>实现类放在 <code>shop/service/impl/ShopApplicationServiceImpl.java</code>。审核通过的关键事务代码：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="meta">@RequiredArgsConstructor</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ShopApplicationServiceImpl</span> <span class="keyword">implements</span> <span class="title class_">ShopApplicationService</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ShopApplicationMapper applicationMapper;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ShopMapper shopMapper;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> IShopTypeService shopTypeService;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="meta">@Transactional</span></span><br><span class="line">    <span class="keyword">public</span> Result <span class="title function_">audit</span><span class="params">(<span class="type">long</span> id, ShopAuditRequest req, <span class="type">long</span> adminId)</span> &#123;</span><br><span class="line">        <span class="type">ShopApplication</span> <span class="variable">app</span> <span class="operator">=</span> applicationMapper.selectById(id);</span><br><span class="line">        <span class="keyword">if</span> (app == <span class="literal">null</span> || !Integer.valueOf(<span class="number">0</span>).equals(app.getAuditStatus())) &#123;</span><br><span class="line">            <span class="keyword">return</span> Result.fail(<span class="string">&quot;申请不存在或已处理&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (!req.approved()) &#123;</span><br><span class="line">            <span class="keyword">if</span> (StrUtil.isBlank(req.reason())) <span class="keyword">return</span> Result.fail(<span class="string">&quot;拒绝时必须填写原因&quot;</span>);</span><br><span class="line">            applicationMapper.reject(id, adminId, req.reason());</span><br><span class="line">            <span class="keyword">return</span> Result.ok();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (req.x() == <span class="literal">null</span> || req.y() == <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> Result.fail(<span class="string">&quot;审核通过时必须补齐经纬度&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">Shop</span> <span class="variable">shop</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Shop</span>()</span><br><span class="line">                .setOwnerUserId(app.getApplicantUserId())</span><br><span class="line">                .setName(app.getName()).setTypeId(app.getTypeId())</span><br><span class="line">                .setImages(app.getImages()).setArea(app.getArea())</span><br><span class="line">                .setAddress(app.getAddress()).setX(req.x()).setY(req.y())</span><br><span class="line">                .setAvgPrice(app.getAvgPrice()).setOpenHours(app.getOpenHours())</span><br><span class="line">                .setSold(<span class="number">0</span>).setComments(<span class="number">0</span>).setScore(<span class="number">0</span>).setBusinessStatus(<span class="number">1</span>);</span><br><span class="line">        shopMapper.insert(shop);</span><br><span class="line">        <span class="type">int</span> <span class="variable">changed</span> <span class="operator">=</span> applicationMapper.approve(id, adminId, shop.getId(), req.x(), req.y());</span><br><span class="line">        <span class="keyword">if</span> (changed != <span class="number">1</span>) <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">IllegalStateException</span>(<span class="string">&quot;申请状态更新失败&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> Result.ok(shop.getId());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="5-新增两个-Controller"><a href="#5-新增两个-Controller" class="headerlink" title="5. 新增两个 Controller"></a>5. 新增两个 Controller</h4><p><code>shop/api/MerchantShopApplicationController.java</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="meta">@RequestMapping(&quot;/merchant/shop-applications&quot;)</span></span><br><span class="line"><span class="meta">@RequiredArgsConstructor</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">MerchantShopApplicationController</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ShopApplicationService service;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@PostMapping</span></span><br><span class="line">    <span class="keyword">public</span> Result <span class="title function_">apply</span><span class="params">(<span class="meta">@Valid</span> <span class="meta">@RequestBody</span> ShopApplyRequest req,</span></span><br><span class="line"><span class="params">                        <span class="meta">@AuthenticationPrincipal</span> Jwt jwt)</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> service.apply(req, Long.parseLong(jwt.getSubject()));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>shop/api/AdminShopApplicationController.java</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="meta">@RequestMapping(&quot;/admin/shop-applications&quot;)</span></span><br><span class="line"><span class="meta">@RequiredArgsConstructor</span></span><br><span class="line"><span class="meta">@PreAuthorize(&quot;hasRole(&#x27;ADMIN&#x27;)&quot;)</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">AdminShopApplicationController</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ShopApplicationService service;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@PutMapping(&quot;/&#123;id&#125;/audit&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> Result <span class="title function_">audit</span><span class="params">(<span class="meta">@PathVariable</span> <span class="type">long</span> id,</span></span><br><span class="line"><span class="params">                        <span class="meta">@Valid</span> <span class="meta">@RequestBody</span> ShopAuditRequest req,</span></span><br><span class="line"><span class="params">                        <span class="meta">@AuthenticationPrincipal</span> Jwt jwt)</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> service.audit(id, req, Long.parseLong(jwt.getSubject()));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>原 <code>ShopController.saveShop</code> 应删除，或改成只允许管理员；不能让普通用户继续直接 <code>shopService.save(shop)</code>。</p>
+<h3 id="D-商品正式表和申请代码"><a href="#D-商品正式表和申请代码" class="headerlink" title="D. 商品正式表和申请代码"></a>D. 商品正式表和申请代码</h3><h4 id="1-新增实体"><a href="#1-新增实体" class="headerlink" title="1. 新增实体"></a>1. 新增实体</h4><p><code>product/domain/Product.java</code> 映射 <code>tb_product</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Data</span> <span class="meta">@Accessors(chain = true)</span></span><br><span class="line"><span class="meta">@TableName(&quot;tb_product&quot;)</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">Product</span> &#123;</span><br><span class="line">    <span class="meta">@TableId(type = IdType.AUTO)</span> <span class="keyword">private</span> Long id;</span><br><span class="line">    <span class="keyword">private</span> Long shopId;</span><br><span class="line">    <span class="keyword">private</span> Long createdBy;</span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line">    <span class="keyword">private</span> String description;</span><br><span class="line">    <span class="keyword">private</span> String images;</span><br><span class="line">    <span class="keyword">private</span> Long price;</span><br><span class="line">    <span class="keyword">private</span> Integer stock;</span><br><span class="line">    <span class="keyword">private</span> Integer status;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime createTime;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime updateTime;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>product/domain/ProductApplication.java</code> 字段与申请表一一对应：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Data</span> <span class="meta">@Accessors(chain = true)</span></span><br><span class="line"><span class="meta">@TableName(&quot;tb_product_application&quot;)</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ProductApplication</span> &#123;</span><br><span class="line">    <span class="meta">@TableId(type = IdType.AUTO)</span> <span class="keyword">private</span> Long id;</span><br><span class="line">    <span class="keyword">private</span> Long applicantUserId;</span><br><span class="line">    <span class="keyword">private</span> Long shopId;</span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line">    <span class="keyword">private</span> String description;</span><br><span class="line">    <span class="keyword">private</span> String images;</span><br><span class="line">    <span class="keyword">private</span> Long price;</span><br><span class="line">    <span class="keyword">private</span> Integer stock;</span><br><span class="line">    <span class="keyword">private</span> Integer auditStatus;</span><br><span class="line">    <span class="keyword">private</span> String rejectReason;</span><br><span class="line">    <span class="keyword">private</span> Long auditedBy;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime auditedTime;</span><br><span class="line">    <span class="keyword">private</span> Long approvedProductId;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime createTime;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime updateTime;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-DTO、Mapper-和-Service"><a href="#2-DTO、Mapper-和-Service" class="headerlink" title="2. DTO、Mapper 和 Service"></a>2. DTO、Mapper 和 Service</h4><p><code>product/api/dto/ProductApplyRequest.java</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">ProductApplyRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">        @NotBlank @Size(max = 128)</span> String name,</span><br><span class="line">        <span class="meta">@Size(max = 1024)</span> String description,</span><br><span class="line">        <span class="meta">@Size(max = 2048)</span> String images,</span><br><span class="line">        <span class="meta">@NotNull</span> <span class="meta">@PositiveOrZero</span> Long price,</span><br><span class="line">        <span class="meta">@NotNull</span> <span class="meta">@PositiveOrZero</span> Integer stock) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>ProductApplicationMapper</code> 至少提供两个带 <code>audit_status = 0</code> 的更新方法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">approve</span><span class="params">(<span class="type">long</span> id, <span class="type">long</span> adminId, <span class="type">long</span> productId)</span>;</span><br><span class="line"><span class="type">int</span> <span class="title function_">reject</span><span class="params">(<span class="type">long</span> id, <span class="type">long</span> adminId, String reason)</span>;</span><br></pre></td></tr></table></figure>
+
+<p><code>ProductApplicationServiceImpl.audit</code> 的事务顺序：查询申请 → 校验待审核 → 创建 <code>Product(status=2)</code> → 更新申请为通过并回写 <code>approved_product_id</code>。创建申请只插入 <code>tb_product_application</code>，不得调用 <code>productMapper.insert</code>。</p>
+<p>Controller 路径：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">POST /merchant/shops/&#123;shopId&#125;/product-applications</span><br><span class="line">GET  /merchant/shops/&#123;shopId&#125;/product-applications/mine</span><br><span class="line">GET  /admin/product-applications</span><br><span class="line">PUT  /admin/product-applications/&#123;id&#125;/audit</span><br><span class="line">PUT  /merchant/products/&#123;id&#125;/status</span><br></pre></td></tr></table></figure>
+
+<p>商品状态接口必须通过 <code>product.shopId -&gt; shop.ownerUserId</code> 校验归属；只能修改 <code>status</code>，不能让客户端修改审核申请字段。</p>
+<h3 id="E-普通优惠券和秒杀券代码分开"><a href="#E-普通优惠券和秒杀券代码分开" class="headerlink" title="E. 普通优惠券和秒杀券代码分开"></a>E. 普通优惠券和秒杀券代码分开</h3><h4 id="1-修改正式-Voucher-java"><a href="#1-修改正式-Voucher-java" class="headerlink" title="1. 修改正式 Voucher.java"></a>1. 修改正式 <code>Voucher.java</code></h4><p>在现有字段中增加：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> Long createdBy;</span><br><span class="line"><span class="keyword">private</span> Long productId; <span class="comment">// 可选，商品专属券</span></span><br></pre></td></tr></table></figure>
+
+<h4 id="2-普通券：修改-VoucherController-java"><a href="#2-普通券：修改-VoucherController-java" class="headerlink" title="2. 普通券：修改 VoucherController.java"></a>2. 普通券：修改 <code>VoucherController.java</code></h4><p>不要再直接接收 <code>Voucher</code> 实体，新增 <code>voucher/api/dto/VoucherCreateRequest.java</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">VoucherCreateRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">        @NotBlank @Size(max = 255)</span> String title,</span><br><span class="line">        <span class="meta">@Size(max = 255)</span> String subTitle,</span><br><span class="line">        <span class="meta">@Size(max = 1024)</span> String rules,</span><br><span class="line">        <span class="meta">@NotNull</span> <span class="meta">@Positive</span> Long payValue,</span><br><span class="line">        <span class="meta">@NotNull</span> <span class="meta">@Positive</span> Long actualValue,</span><br><span class="line">        Long productId) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>修改为：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@PostMapping(&quot;/merchant/shops/&#123;shopId&#125;/vouchers&quot;)</span></span><br><span class="line"><span class="meta">@PreAuthorize(&quot;hasAnyRole(&#x27;MERCHANT&#x27;,&#x27;ADMIN&#x27;)&quot;)</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">createNormal</span><span class="params">(<span class="meta">@PathVariable</span> <span class="type">long</span> shopId,</span></span><br><span class="line"><span class="params">                           <span class="meta">@Valid</span> <span class="meta">@RequestBody</span> VoucherCreateRequest req,</span></span><br><span class="line"><span class="params">                           <span class="meta">@AuthenticationPrincipal</span> Jwt jwt)</span> &#123;</span><br><span class="line">    <span class="type">long</span> <span class="variable">userId</span> <span class="operator">=</span> Long.parseLong(jwt.getSubject());</span><br><span class="line">    <span class="keyword">return</span> voucherService.createNormal(shopId, req, userId);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>VoucherServiceImpl.createNormal</code> 中校验正式店铺存在、店主归属、金额和 <code>productId</code> 归属，然后创建：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">Voucher</span> <span class="variable">voucher</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Voucher</span>()</span><br><span class="line">        .setShopId(shopId).setCreatedBy(userId)</span><br><span class="line">        .setTitle(req.title().trim()).setSubTitle(req.subTitle())</span><br><span class="line">        .setRules(req.rules()).setPayValue(req.payValue())</span><br><span class="line">        .setActualValue(req.actualValue()).setProductId(req.productId())</span><br><span class="line">        .setType(<span class="number">0</span>).setStatus(<span class="number">2</span>);</span><br><span class="line">save(voucher);</span><br><span class="line"><span class="keyword">return</span> Result.ok(voucher.getId());</span><br></pre></td></tr></table></figure>
+
+<p>普通优惠券不写任何申请表，不需要管理员审核；但管理员应保留强制下架接口。</p>
+<h4 id="3-秒杀券-DTO-和创建"><a href="#3-秒杀券-DTO-和创建" class="headerlink" title="3. 秒杀券 DTO 和创建"></a>3. 秒杀券 DTO 和创建</h4><p>不新增秒杀券申请实体或申请表。新增 <code>voucher/api/dto/SeckillVoucherCreateRequest.java</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">SeckillVoucherCreateRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">        @NotBlank @Size(max = 255)</span> String title,</span><br><span class="line">        <span class="meta">@Size(max = 255)</span> String subTitle,</span><br><span class="line">        <span class="meta">@Size(max = 1024)</span> String rules,</span><br><span class="line">        <span class="meta">@NotNull</span> <span class="meta">@Positive</span> Long payValue,</span><br><span class="line">        <span class="meta">@NotNull</span> <span class="meta">@Positive</span> Long actualValue,</span><br><span class="line">        Long productId,</span><br><span class="line">        <span class="meta">@NotNull</span> <span class="meta">@Positive</span> Integer stock,</span><br><span class="line">        <span class="meta">@NotNull</span> LocalDateTime beginTime,</span><br><span class="line">        <span class="meta">@NotNull</span> LocalDateTime endTime) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>VoucherServiceImpl.createSeckill</code> 在一个 <code>@Transactional</code> 方法中先校验店铺归属、库存、时间和金额，再创建 <code>Voucher(type=1,status=2)</code> 与 <code>SeckillVoucher</code>。两个写入必须同一事务，避免只创建主表或只创建秒杀库存。</p>
+<p>秒杀券接口路径：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">POST /merchant/shops/&#123;shopId&#125;/seckill-vouchers</span><br><span class="line">PUT  /merchant/vouchers/&#123;id&#125;/status</span><br></pre></td></tr></table></figure>
+
+<p>原 <code>POST /voucher/seckill</code> 应改为店主专用 DTO 接口，或保留为管理员内部兼容接口；不能继续无归属校验地接收 <code>Voucher</code> 实体。</p>
+<h3 id="F-公开查询-Mapper-必须分开"><a href="#F-公开查询-Mapper-必须分开" class="headerlink" title="F. 公开查询 Mapper 必须分开"></a>F. 公开查询 Mapper 必须分开</h3><h4 id="1-商品查询"><a href="#1-商品查询" class="headerlink" title="1. 商品查询"></a>1. 商品查询</h4><p>新增 <code>ProductMapper.queryPublicByShop</code>，SQL：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> id, shop_id, name, description, images, price, stock</span><br><span class="line"><span class="keyword">FROM</span> tb_product</span><br><span class="line"><span class="keyword">WHERE</span> shop_id <span class="operator">=</span> #&#123;shopId&#125; <span class="keyword">AND</span> status <span class="operator">=</span> <span class="number">1</span></span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> create_time <span class="keyword">DESC</span>;</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-优惠券查询"><a href="#2-优惠券查询" class="headerlink" title="2. 优惠券查询"></a>2. 优惠券查询</h4><p>修改现有 <code>src/main/resources/mapper/VoucherMapper.xml</code> 的 <code>queryVoucherOfShop</code>，保留普通券和秒杀券统一查询，但只查正式表和 <code>status = 1</code>：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">select</span> <span class="attr">id</span>=<span class="string">&quot;queryVoucherOfShop&quot;</span></span></span><br><span class="line"><span class="tag">        <span class="attr">resultType</span>=<span class="string">&quot;com.specialweek.voucher.domain.Voucher&quot;</span>&gt;</span></span><br><span class="line">    SELECT v.id, v.shop_id, v.created_by, v.product_id,</span><br><span class="line">           v.title, v.sub_title, v.rules, v.pay_value,</span><br><span class="line">           v.actual_value, v.type, v.status,</span><br><span class="line">           sv.stock, sv.begin_time, sv.end_time</span><br><span class="line">    FROM tb_voucher v</span><br><span class="line">    JOIN tb_shop s ON s.id = v.shop_id</span><br><span class="line">    LEFT JOIN tb_seckill_voucher sv ON sv.voucher_id = v.id</span><br><span class="line">    WHERE v.shop_id = #&#123;shopId&#125; AND v.status = 1</span><br><span class="line"><span class="tag">&lt;/<span class="name">select</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>如果是商品专属券，再增加 <code>JOIN tb_product p ... AND p.status = 1</code> 的条件；普通店铺券不需要关联商品。</p>
+<h3 id="G-审核历史表的完整写入位置"><a href="#G-审核历史表的完整写入位置" class="headerlink" title="G. 审核历史表的完整写入位置"></a>G. 审核历史表的完整写入位置</h3><p>新增：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">src/main/java/com/specialweek/audit/domain/AuditRecord.java</span><br><span class="line">src/main/java/com/specialweek/audit/mapper/AuditRecordMapper.java</span><br></pre></td></tr></table></figure>
+
+<p>在商铺、商品审核 Service 的同一个事务中插入：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">auditRecordMapper.insert(<span class="keyword">new</span> <span class="title class_">AuditRecord</span>()</span><br><span class="line">        .setTargetType(<span class="string">&quot;SHOP&quot;</span>)</span><br><span class="line">        .setTargetId(applicationId)</span><br><span class="line">        .setFromStatus(<span class="number">0</span>)</span><br><span class="line">        .setToStatus(<span class="number">1</span>)</span><br><span class="line">        .setOperatorUserId(adminId)</span><br><span class="line">        .setReason(req.reason()));</span><br></pre></td></tr></table></figure>
+
+<p>普通优惠券和秒杀券自主创建不产生审核记录；如需追踪管理员强制下架，可另记操作日志。</p>
+<h3 id="H-数据库迁移文件放置"><a href="#H-数据库迁移文件放置" class="headerlink" title="H. 数据库迁移文件放置"></a>H. 数据库迁移文件放置</h3><p>不要直接把线上 <code>queyue.sql</code> 当作每次升级脚本。建议新增：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">docs/sql/V2__shop_product_voucher_application.sql</span><br></pre></td></tr></table></figure>
+
+<p>内容包括本方案中的 <code>ALTER TABLE tb_user</code>、<code>ALTER TABLE tb_shop</code>、<code>CREATE TABLE tb_shop_application</code>、<code>CREATE TABLE tb_product</code>、<code>CREATE TABLE tb_product_application</code>，以及 <code>tb_voucher.created_by/product_id</code> 变更。当前项目未接入 Flyway 时，可以由部署脚本或 DBA 执行该文件；执行前先备份并检查历史数据。</p>
+<h2 id="十五、实现完成后的最终检查"><a href="#十五、实现完成后的最终检查" class="headerlink" title="十五、实现完成后的最终检查"></a>十五、实现完成后的最终检查</h2><p>完成代码后至少验证以下场景：</p>
+<ol>
+<li>普通用户不能访问 <code>/admin/**</code>；</li>
+<li>未登录用户不能提交商铺、商品或优惠券；</li>
+<li>用户提交商铺后，<code>tb_shop</code> 没有记录，只有 <code>tb_shop_application</code> 有记录；</li>
+<li>管理员不补坐标时不能通过商铺审核；</li>
+<li>商铺审核通过后，事务内生成 <code>tb_shop</code>，申请表记录 <code>approved_shop_id</code>；</li>
+<li>未审核商铺不能提交商品或普通优惠券；</li>
+<li>商品审核前不能出现在商品公开列表；</li>
+<li>普通优惠券可由店主直接创建，但不能跨店创建；</li>
+<li>秒杀券可由店主直接创建，且必须同时生成 <code>tb_voucher</code> 和 <code>tb_seckill_voucher</code>；</li>
+<li>普通券和秒杀券重复点击时不能生成非预期重复记录；</li>
+<li>店主不能修改其他店铺的商品、普通券或秒杀券；</li>
+<li>审核通过&#x2F;优惠券上架后，相关 Redis 缓存被清理。</li>
+</ol>
+<h2 id="十六、可直接照着实现的-Service-方法模板"><a href="#十六、可直接照着实现的-Service-方法模板" class="headerlink" title="十六、可直接照着实现的 Service 方法模板"></a>十六、可直接照着实现的 Service 方法模板</h2><p>以下模板把商铺、商品申请审核，以及普通券、秒杀券自主创建的事务边界写完整。实际项目中可把 <code>Result</code> 换成项目统一的异常处理方式；商铺和商品必须遵循“先申请表、后正式表”，优惠券则通过服务端校验后直接写正式表。</p>
+<h3 id="1-商铺申请提交"><a href="#1-商铺申请提交" class="headerlink" title="1. 商铺申请提交"></a>1. 商铺申请提交</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="meta">@Transactional</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">apply</span><span class="params">(ShopApplyRequest req, <span class="type">long</span> userId)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (shopTypeService.getById(req.typeId()) == <span class="literal">null</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> Result.fail(<span class="string">&quot;商铺类型不存在&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="type">ShopApplication</span> <span class="variable">app</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ShopApplication</span>()</span><br><span class="line">            .setApplicantUserId(userId)</span><br><span class="line">            .setName(req.name().trim())</span><br><span class="line">            .setTypeId(req.typeId())</span><br><span class="line">            .setImages(req.images())</span><br><span class="line">            .setArea(req.area())</span><br><span class="line">            .setAddress(req.address().trim())</span><br><span class="line">            .setAvgPrice(req.avgPrice())</span><br><span class="line">            .setOpenHours(req.openHours())</span><br><span class="line">            .setAuditStatus(<span class="number">0</span>);</span><br><span class="line">    applicationMapper.insert(app);</span><br><span class="line">    <span class="keyword">return</span> Result.ok(app.getId());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-商品申请审核通过"><a href="#2-商品申请审核通过" class="headerlink" title="2. 商品申请审核通过"></a>2. 商品申请审核通过</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="meta">@Transactional</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">audit</span><span class="params">(<span class="type">long</span> id, AuditRequest req, <span class="type">long</span> adminId)</span> &#123;</span><br><span class="line">    <span class="type">ProductApplication</span> <span class="variable">app</span> <span class="operator">=</span> applicationMapper.selectById(id);</span><br><span class="line">    <span class="keyword">if</span> (app == <span class="literal">null</span> || !Integer.valueOf(<span class="number">0</span>).equals(app.getAuditStatus())) &#123;</span><br><span class="line">        <span class="keyword">return</span> Result.fail(<span class="string">&quot;商品申请不存在或已处理&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (!req.approved()) &#123;</span><br><span class="line">        <span class="keyword">if</span> (StrUtil.isBlank(req.reason())) <span class="keyword">return</span> Result.fail(<span class="string">&quot;拒绝时必须填写原因&quot;</span>);</span><br><span class="line">        <span class="type">int</span> <span class="variable">changed</span> <span class="operator">=</span> applicationMapper.reject(id, adminId, req.reason());</span><br><span class="line">        <span class="keyword">return</span> changed == <span class="number">1</span> ? Result.ok() : Result.fail(<span class="string">&quot;申请已被其他管理员处理&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">Product</span> <span class="variable">product</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Product</span>()</span><br><span class="line">            .setShopId(app.getShopId())</span><br><span class="line">            .setCreatedBy(app.getApplicantUserId())</span><br><span class="line">            .setName(app.getName())</span><br><span class="line">            .setDescription(app.getDescription())</span><br><span class="line">            .setImages(app.getImages())</span><br><span class="line">            .setPrice(app.getPrice())</span><br><span class="line">            .setStock(app.getStock())</span><br><span class="line">            .setStatus(<span class="number">2</span>);</span><br><span class="line">    productMapper.insert(product);</span><br><span class="line">    <span class="type">int</span> <span class="variable">changed</span> <span class="operator">=</span> applicationMapper.approve(id, adminId, product.getId());</span><br><span class="line">    <span class="keyword">if</span> (changed != <span class="number">1</span>) <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">IllegalStateException</span>(<span class="string">&quot;申请状态更新失败&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> Result.ok(product.getId());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>ProductApplicationMapper.approve</code> 的 SQL 必须是：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">UPDATE</span> tb_product_application</span><br><span class="line"><span class="keyword">SET</span> audit_status <span class="operator">=</span> <span class="number">1</span>, audited_by <span class="operator">=</span> #&#123;adminId&#125;, audited_time <span class="operator">=</span> NOW(),</span><br><span class="line">    approved_product_id <span class="operator">=</span> #&#123;productId&#125;, reject_reason <span class="operator">=</span> <span class="keyword">NULL</span></span><br><span class="line"><span class="keyword">WHERE</span> id <span class="operator">=</span> #&#123;id&#125; <span class="keyword">AND</span> audit_status <span class="operator">=</span> <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-普通优惠券创建"><a href="#3-普通优惠券创建" class="headerlink" title="3. 普通优惠券创建"></a>3. 普通优惠券创建</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="meta">@Transactional</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">createNormal</span><span class="params">(<span class="type">long</span> shopId, VoucherCreateRequest req, <span class="type">long</span> userId)</span> &#123;</span><br><span class="line">    <span class="type">Shop</span> <span class="variable">shop</span> <span class="operator">=</span> shopMapper.selectById(shopId);</span><br><span class="line">    <span class="keyword">if</span> (shop == <span class="literal">null</span> || !Integer.valueOf(<span class="number">1</span>).equals(shop.getBusinessStatus())) &#123;</span><br><span class="line">        <span class="keyword">return</span> Result.fail(<span class="string">&quot;店铺不存在或未营业&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (!isAdmin(userId) &amp;&amp; !Objects.equals(shop.getOwnerUserId(), userId)) &#123;</span><br><span class="line">        <span class="keyword">return</span> Result.fail(<span class="string">&quot;无权操作该店铺&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    validateVoucherMoney(req.payValue(), req.actualValue());</span><br><span class="line">    validateProductBelongsToShop(req.productId(), shopId);</span><br><span class="line"></span><br><span class="line">    <span class="type">Voucher</span> <span class="variable">voucher</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Voucher</span>()</span><br><span class="line">            .setShopId(shopId)</span><br><span class="line">            .setCreatedBy(userId)</span><br><span class="line">            .setProductId(req.productId())</span><br><span class="line">            .setTitle(req.title().trim())</span><br><span class="line">            .setSubTitle(req.subTitle())</span><br><span class="line">            .setRules(req.rules())</span><br><span class="line">            .setPayValue(req.payValue())</span><br><span class="line">            .setActualValue(req.actualValue())</span><br><span class="line">            .setType(<span class="number">0</span>)</span><br><span class="line">            .setStatus(<span class="number">2</span>);</span><br><span class="line">    save(voucher);</span><br><span class="line">    <span class="keyword">return</span> Result.ok(voucher.getId());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>validateVoucherMoney</code> 至少保证 <code>actualValue &gt;= payValue &gt; 0</code>、折扣不超过平台上限；具体比例由产品规则决定。</p>
+<h3 id="4-秒杀券直接创建"><a href="#4-秒杀券直接创建" class="headerlink" title="4. 秒杀券直接创建"></a>4. 秒杀券直接创建</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="meta">@Transactional</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">createSeckill</span><span class="params">(<span class="type">long</span> shopId, SeckillVoucherCreateRequest req, <span class="type">long</span> userId)</span> &#123;</span><br><span class="line">    validateShopOwner(shopId, userId);</span><br><span class="line">    validateSeckill(req);</span><br><span class="line">    <span class="type">Voucher</span> <span class="variable">voucher</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Voucher</span>()</span><br><span class="line">            .setShopId(shopId).setCreatedBy(userId)</span><br><span class="line">            .setProductId(req.productId())</span><br><span class="line">            .setTitle(req.title()).setSubTitle(req.subTitle())</span><br><span class="line">            .setRules(req.rules()).setPayValue(req.payValue())</span><br><span class="line">            .setActualValue(req.actualValue())</span><br><span class="line">            .setType(<span class="number">1</span>)</span><br><span class="line">            .setStatus(<span class="number">2</span>);</span><br><span class="line">    voucherMapper.insert(voucher);</span><br><span class="line"></span><br><span class="line">    <span class="type">SeckillVoucher</span> <span class="variable">seckill</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">SeckillVoucher</span>()</span><br><span class="line">            .setVoucherId(voucher.getId())</span><br><span class="line">            .setStock(req.stock())</span><br><span class="line">            .setBeginTime(req.beginTime())</span><br><span class="line">            .setEndTime(req.endTime());</span><br><span class="line">    seckillVoucherMapper.insert(seckill);</span><br><span class="line">    <span class="keyword">return</span> Result.ok(voucher.getId());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-Controller-中统一解析用户-id"><a href="#5-Controller-中统一解析用户-id" class="headerlink" title="5. Controller 中统一解析用户 id"></a>5. Controller 中统一解析用户 id</h3><p>项目现有 Controller 已采用这种写法，新增接口保持一致：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="type">long</span> <span class="title function_">userId</span><span class="params">(Jwt jwt)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> Long.parseLong(jwt.getSubject());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>不要从请求参数、请求体或前端隐藏字段读取当前用户 id。</p>
+<h2 id="十七、现有代码的删除-替换对照表"><a href="#十七、现有代码的删除-替换对照表" class="headerlink" title="十七、现有代码的删除&#x2F;替换对照表"></a>十七、现有代码的删除&#x2F;替换对照表</h2><table>
+<thead>
+<tr>
+<th>现有位置</th>
+<th>处理方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ShopController.saveShop</code></td>
+<td>删除普通用户直写；改为调用商铺申请 Service，或限制管理员</td>
+</tr>
+<tr>
+<td><code>ShopController.updateShop</code></td>
+<td>增加店主归属校验；正式资料重大变更需重新审核</td>
+</tr>
+<tr>
+<td><code>VoucherController.addVoucher</code></td>
+<td>改为接收 <code>VoucherCreateRequest</code>，只允许店主创建 <code>type=0</code> 普通券</td>
+</tr>
+<tr>
+<td><code>VoucherController.addSeckillVoucher</code></td>
+<td>改为店主专用 DTO 接口，直接创建并校验秒杀券</td>
+</tr>
+<tr>
+<td><code>VoucherServiceImpl.addSeckillVoucher</code></td>
+<td>保留事务创建 <code>tb_voucher</code> + <code>tb_seckill_voucher</code> 的逻辑，并增加店主、库存、时间校验</td>
+</tr>
+<tr>
+<td><code>VoucherMapper.xml</code></td>
+<td>公开查询只查 <code>status=1</code> 的正式券，并按需关联正式商品</td>
+</tr>
+<tr>
+<td><code>SecurityConfig</code></td>
+<td>增加 <code>/merchant/**</code>、<code>/admin/**</code> 的角色限制和 JWT Authority 转换</td>
+</tr>
+<tr>
+<td><code>JwtService</code></td>
+<td>access&#x2F;refresh token 增加 <code>role</code> claim</td>
+</tr>
+<tr>
+<td><code>Shop.java</code></td>
+<td>增加 <code>ownerUserId</code>、<code>businessStatus</code>，坐标建议改 <code>BigDecimal</code></td>
+</tr>
+<tr>
+<td><code>Voucher.java</code></td>
+<td>增加 <code>createdBy</code>、可选 <code>productId</code></td>
+</tr>
+</tbody></table>
+<h2 id="十八、不要这样实现"><a href="#十八、不要这样实现" class="headerlink" title="十八、不要这样实现"></a>十八、不要这样实现</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 错误：普通用户直接把申请对象保存成正式商铺</span></span><br><span class="line">shopService.save(shop);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 错误：秒杀券绕过店铺归属校验，直接接收并保存前端 Voucher 实体</span></span><br><span class="line">voucherService.save(voucher);</span><br></pre></td></tr></table></figure>
+
+<p>正确顺序是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">查询申请并确认 audit_status=0</span><br><span class="line">→ 创建正式记录</span><br><span class="line">→ 回写 approved_*_id 和 audit_status</span><br><span class="line">→ 同一事务提交</span><br></pre></td></tr></table></figure>
+
+<p>如果任一步失败，事务整体回滚，不留下“申请已通过但正式记录不存在”或“正式记录已创建但申请仍待审核”的不一致状态。</p>
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/local/">local</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0/" title="店铺、商品创建"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">店铺、商品创建</div></div><div class="info-2"><div class="info-item-1">业务设计一个用户只能有一个商铺，商铺和商品必须审核，优惠券由商家自主发布： 1234567用户提交商品资料       商家创建普通优惠券       商家创建秒杀券       │                       │                       │       ▼                       ▼                       ▼tb_product_application   直接写tb_voucher       事务写tb_voucher + tb_seckill_voucher       │       ├─拒绝：保留申请记录       └─通过：创建tb_product  优惠券默认属于店铺，店铺种的全部商品都可以使用店铺的优惠卷。 用户不能直接写商铺、商品正式表，用户申请创建店铺填写店铺信息，然后这个申请由管理员来审核，管理员确认审核通过后才写入正式表并在客户端显示，用户在店铺中上架商品同理， 数据库设计用户角色当前 tb_user 用role字段表示用户的身份。 商铺申请表 tb_shop_applica...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0/" title="店铺、商品创建"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-04</div><div class="info-item-2">店铺、商品创建</div></div><div class="info-2"><div class="info-item-1">业务设计一个用户只能有一个商铺，商铺和商品必须审核，优惠券由商家自主发布： 1234567用户提交商品资料       商家创建普通优惠券       商家创建秒杀券       │                       │                       │       ▼                       ▼                       ▼tb_product_application   直接写tb_voucher       事务写tb_voucher + tb_seckill_voucher       │       ├─拒绝：保留申请记录       └─通过：创建tb_product  优惠券默认属于店铺，店铺种的全部商品都可以使用店铺的优惠卷。 用户不能直接写商铺、商品正式表，用户申请创建店铺填写店铺信息，然后这个申请由管理员来审核，管理员确认审核通过后才写入正式表并在客户端显示，用户在店铺中上架商品同理， 数据库设计用户角色当前 tb_user 用role字段表示用户的身份。 商铺申请表 tb_shop_applica...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">specialweek4</div><div class="author-info-description">specialweek4的博客,记录我的学习和生活点滴</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">67</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">22</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">15</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/specialweek4"><i class="fab fa-github"></i><span>关注我</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/specialweek4" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:504957307@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">❀Specialweek Blog❀ 记录我的学习和生活，分享我喜欢的东西。🎸🎶❀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E9%9B%80%E8%B7%83%EF%BC%9A%E5%95%86%E9%93%BA%E3%80%81%E5%95%86%E5%93%81%E4%B8%8E%E4%BC%98%E6%83%A0%E5%88%B8%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88"><span class="toc-number">1.</span> <span class="toc-text">雀跃：商铺、商品与优惠券申请审核后端改造方案</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E4%B8%9A%E5%8A%A1%E8%BE%B9%E7%95%8C"><span class="toc-number">1.1.</span> <span class="toc-text">一、业务边界</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%BD%93%E5%89%8D%E9%A1%B9%E7%9B%AE%E4%B8%8E%E6%94%B9%E9%80%A0%E7%9B%AE%E6%A0%87"><span class="toc-number">1.2.</span> <span class="toc-text">二、当前项目与改造目标</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%95%B0%E6%8D%AE%E5%BA%93%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.3.</span> <span class="toc-text">三、数据库设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E7%94%A8%E6%88%B7%E8%A7%92%E8%89%B2"><span class="toc-number">1.3.1.</span> <span class="toc-text">1. 用户角色</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%AD%A3%E5%BC%8F%E5%95%86%E9%93%BA%E8%A1%A8-tb-shop"><span class="toc-number">1.3.2.</span> <span class="toc-text">2. 正式商铺表 tb_shop</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%95%86%E9%93%BA%E7%94%B3%E8%AF%B7%E8%A1%A8-tb-shop-application"><span class="toc-number">1.3.3.</span> <span class="toc-text">3. 商铺申请表 tb_shop_application</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E6%AD%A3%E5%BC%8F%E5%95%86%E5%93%81%E8%A1%A8-tb-product%EF%BC%88%E6%96%B0%E5%A2%9E%EF%BC%89"><span class="toc-number">1.3.4.</span> <span class="toc-text">4. 正式商品表 tb_product（新增）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E8%A1%A8-tb-product-application%EF%BC%88%E6%96%B0%E5%A2%9E%EF%BC%89"><span class="toc-number">1.3.5.</span> <span class="toc-text">5. 商品申请表 tb_product_application（新增）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-%E6%AD%A3%E5%BC%8F%E4%BC%98%E6%83%A0%E5%88%B8%E8%A1%A8-tb-voucher"><span class="toc-number">1.3.6.</span> <span class="toc-text">6. 正式优惠券表 tb_voucher</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-%E5%AE%A1%E6%A0%B8%E5%8E%86%E5%8F%B2%E8%A1%A8%EF%BC%88%E6%8E%A8%E8%8D%90%EF%BC%89"><span class="toc-number">1.3.7.</span> <span class="toc-text">7. 审核历史表（推荐）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E8%AE%A4%E8%AF%81%E4%B8%8E%E6%9D%83%E9%99%90"><span class="toc-number">1.4.</span> <span class="toc-text">四、认证与权限</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%95%86%E9%93%BA%E7%94%B3%E8%AF%B7%E6%B5%81%E7%A8%8B"><span class="toc-number">1.5.</span> <span class="toc-text">五、商铺申请流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-DTO-%E5%92%8C%E6%8E%A5%E5%8F%A3"><span class="toc-number">1.5.1.</span> <span class="toc-text">1. DTO 和接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%8F%90%E4%BA%A4%E5%92%8C%E5%AE%A1%E6%A0%B8"><span class="toc-number">1.5.2.</span> <span class="toc-text">2. 提交和审核</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E6%B5%81%E7%A8%8B%EF%BC%88%E7%8B%AC%E7%AB%8B%E4%BA%8E%E4%BC%98%E6%83%A0%E5%88%B8%EF%BC%89"><span class="toc-number">1.6.</span> <span class="toc-text">六、商品申请流程（独立于优惠券）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-DTO"><span class="toc-number">1.6.1.</span> <span class="toc-text">1. DTO</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%8E%A5%E5%8F%A3"><span class="toc-number">1.6.2.</span> <span class="toc-text">2. 接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%8F%90%E4%BA%A4%E6%A0%A1%E9%AA%8C%E4%B8%8E%E5%AE%A1%E6%A0%B8%E9%80%9A%E8%BF%87"><span class="toc-number">1.6.3.</span> <span class="toc-text">3. 提交校验与审核通过</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E4%BC%98%E6%83%A0%E5%88%B8%E6%B5%81%E7%A8%8B%EF%BC%88%E6%99%AE%E9%80%9A%E5%88%B8%E5%92%8C%E7%A7%92%E6%9D%80%E5%88%B8%E5%9D%87%E8%87%AA%E4%B8%BB%E5%8F%91%E5%B8%83%EF%BC%89"><span class="toc-number">1.7.</span> <span class="toc-text">七、优惠券流程（普通券和秒杀券均自主发布）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-DTO-%E5%92%8C%E6%8E%A5%E5%8F%A3-1"><span class="toc-number">1.7.1.</span> <span class="toc-text">1. DTO 和接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%99%AE%E9%80%9A%E4%BC%98%E6%83%A0%E5%88%B8%E7%9B%B4%E6%8E%A5%E5%88%9B%E5%BB%BA"><span class="toc-number">1.7.2.</span> <span class="toc-text">1. 普通优惠券直接创建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E7%A7%92%E6%9D%80%E5%88%B8%E7%9B%B4%E6%8E%A5%E5%88%9B%E5%BB%BA"><span class="toc-number">1.7.3.</span> <span class="toc-text">2. 秒杀券直接创建</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E5%AE%A2%E6%88%B7%E7%AB%AF%E5%85%AC%E5%BC%80%E6%9F%A5%E8%AF%A2"><span class="toc-number">1.8.</span> <span class="toc-text">八、客户端公开查询</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%95%86%E5%93%81"><span class="toc-number">1.8.1.</span> <span class="toc-text">商品</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E6%83%A0%E5%88%B8"><span class="toc-number">1.8.2.</span> <span class="toc-text">优惠券</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%9D%E3%80%81Redis-%E7%9A%84%E6%AD%A3%E7%A1%AE%E4%BD%BF%E7%94%A8%E6%96%B9%E5%BC%8F"><span class="toc-number">1.9.</span> <span class="toc-text">九、Redis 的正确使用方式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E3%80%81%E5%BB%BA%E8%AE%AE%E6%96%B0%E5%A2%9E%E6%88%96%E8%B0%83%E6%95%B4%E7%9A%84%E4%BB%A3%E7%A0%81%E6%96%87%E4%BB%B6"><span class="toc-number">1.10.</span> <span class="toc-text">十、建议新增或调整的代码文件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%B8%80%E3%80%81%E4%BA%8B%E5%8A%A1%E3%80%81%E5%B9%B6%E5%8F%91%E5%92%8C%E5%AE%89%E5%85%A8%E8%A6%81%E6%B1%82"><span class="toc-number">1.11.</span> <span class="toc-text">十一、事务、并发和安全要求</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%BA%8C%E3%80%81%E6%8E%A8%E8%8D%90%E5%AE%9E%E6%96%BD%E9%A1%BA%E5%BA%8F"><span class="toc-number">1.12.</span> <span class="toc-text">十二、推荐实施顺序</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%B8%89%E3%80%81%E7%BB%93%E8%AE%BA"><span class="toc-number">1.13.</span> <span class="toc-text">十三、结论</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E5%9B%9B%E3%80%81%E6%8C%89%E6%96%87%E4%BB%B6%E8%90%BD%E5%9C%B0%E7%9A%84%E5%AE%8C%E6%95%B4%E4%BB%A3%E7%A0%81%E6%B8%85%E5%8D%95"><span class="toc-number">1.14.</span> <span class="toc-text">十四、按文件落地的完整代码清单</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#A-%E4%BF%AE%E6%94%B9%E7%8E%B0%E6%9C%89%E7%94%A8%E6%88%B7%E5%92%8C-JWT-%E6%96%87%E4%BB%B6"><span class="toc-number">1.14.1.</span> <span class="toc-text">A. 修改现有用户和 JWT 文件</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E4%BF%AE%E6%94%B9-src-main-java-com-specialweek-user-domain-User-java"><span class="toc-number">1.14.1.1.</span> <span class="toc-text">1. 修改 src&#x2F;main&#x2F;java&#x2F;com&#x2F;specialweek&#x2F;user&#x2F;domain&#x2F;User.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E4%BF%AE%E6%94%B9-src-main-java-com-specialweek-auth-token-JwtService-java"><span class="toc-number">1.14.1.2.</span> <span class="toc-text">2. 修改 src&#x2F;main&#x2F;java&#x2F;com&#x2F;specialweek&#x2F;auth&#x2F;token&#x2F;JwtService.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-%E4%BF%AE%E6%94%B9-src-main-java-com-specialweek-auth-config-SecurityConfig-java"><span class="toc-number">1.14.1.3.</span> <span class="toc-text">3. 修改 src&#x2F;main&#x2F;java&#x2F;com&#x2F;specialweek&#x2F;auth&#x2F;config&#x2F;SecurityConfig.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-%E4%BF%AE%E6%94%B9-src-main-java-com-specialweek-QueYueApplication-java"><span class="toc-number">1.14.1.4.</span> <span class="toc-text">4. 修改 src&#x2F;main&#x2F;java&#x2F;com&#x2F;specialweek&#x2F;QueYueApplication.java</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#B-%E4%BF%AE%E6%94%B9%E6%AD%A3%E5%BC%8F%E5%95%86%E9%93%BA%E5%AE%9E%E4%BD%93%EF%BC%8C%E6%96%B0%E5%A2%9E%E5%95%86%E9%93%BA%E7%94%B3%E8%AF%B7%E5%AE%9E%E4%BD%93"><span class="toc-number">1.14.2.</span> <span class="toc-text">B. 修改正式商铺实体，新增商铺申请实体</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E4%BF%AE%E6%94%B9-src-main-java-com-specialweek-shop-domain-Shop-java"><span class="toc-number">1.14.2.1.</span> <span class="toc-text">1. 修改 src&#x2F;main&#x2F;java&#x2F;com&#x2F;specialweek&#x2F;shop&#x2F;domain&#x2F;Shop.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E6%96%B0%E5%A2%9E-src-main-java-com-specialweek-shop-domain-ShopApplication-java"><span class="toc-number">1.14.2.2.</span> <span class="toc-text">2. 新增 src&#x2F;main&#x2F;java&#x2F;com&#x2F;specialweek&#x2F;shop&#x2F;domain&#x2F;ShopApplication.java</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#C-%E5%95%86%E9%93%BA%E7%94%B3%E8%AF%B7-DTO%E3%80%81Mapper%E3%80%81Service%E3%80%81Controller"><span class="toc-number">1.14.3.</span> <span class="toc-text">C. 商铺申请 DTO、Mapper、Service、Controller</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E6%96%B0%E5%A2%9E-shop-api-dto-ShopApplyRequest-java"><span class="toc-number">1.14.3.1.</span> <span class="toc-text">1. 新增 shop&#x2F;api&#x2F;dto&#x2F;ShopApplyRequest.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E6%96%B0%E5%A2%9E-shop-api-dto-ShopAuditRequest-java"><span class="toc-number">1.14.3.2.</span> <span class="toc-text">2. 新增 shop&#x2F;api&#x2F;dto&#x2F;ShopAuditRequest.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-%E6%96%B0%E5%A2%9E-shop-mapper-ShopApplicationMapper-java"><span class="toc-number">1.14.3.3.</span> <span class="toc-text">3. 新增 shop&#x2F;mapper&#x2F;ShopApplicationMapper.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-%E6%96%B0%E5%A2%9E-shop-service-ShopApplicationService-java"><span class="toc-number">1.14.3.4.</span> <span class="toc-text">4. 新增 shop&#x2F;service&#x2F;ShopApplicationService.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#5-%E6%96%B0%E5%A2%9E%E4%B8%A4%E4%B8%AA-Controller"><span class="toc-number">1.14.3.5.</span> <span class="toc-text">5. 新增两个 Controller</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#D-%E5%95%86%E5%93%81%E6%AD%A3%E5%BC%8F%E8%A1%A8%E5%92%8C%E7%94%B3%E8%AF%B7%E4%BB%A3%E7%A0%81"><span class="toc-number">1.14.4.</span> <span class="toc-text">D. 商品正式表和申请代码</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E6%96%B0%E5%A2%9E%E5%AE%9E%E4%BD%93"><span class="toc-number">1.14.4.1.</span> <span class="toc-text">1. 新增实体</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-DTO%E3%80%81Mapper-%E5%92%8C-Service"><span class="toc-number">1.14.4.2.</span> <span class="toc-text">2. DTO、Mapper 和 Service</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#E-%E6%99%AE%E9%80%9A%E4%BC%98%E6%83%A0%E5%88%B8%E5%92%8C%E7%A7%92%E6%9D%80%E5%88%B8%E4%BB%A3%E7%A0%81%E5%88%86%E5%BC%80"><span class="toc-number">1.14.5.</span> <span class="toc-text">E. 普通优惠券和秒杀券代码分开</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E4%BF%AE%E6%94%B9%E6%AD%A3%E5%BC%8F-Voucher-java"><span class="toc-number">1.14.5.1.</span> <span class="toc-text">1. 修改正式 Voucher.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E6%99%AE%E9%80%9A%E5%88%B8%EF%BC%9A%E4%BF%AE%E6%94%B9-VoucherController-java"><span class="toc-number">1.14.5.2.</span> <span class="toc-text">2. 普通券：修改 VoucherController.java</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-%E7%A7%92%E6%9D%80%E5%88%B8-DTO-%E5%92%8C%E5%88%9B%E5%BB%BA"><span class="toc-number">1.14.5.3.</span> <span class="toc-text">3. 秒杀券 DTO 和创建</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#F-%E5%85%AC%E5%BC%80%E6%9F%A5%E8%AF%A2-Mapper-%E5%BF%85%E9%A1%BB%E5%88%86%E5%BC%80"><span class="toc-number">1.14.6.</span> <span class="toc-text">F. 公开查询 Mapper 必须分开</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E5%95%86%E5%93%81%E6%9F%A5%E8%AF%A2"><span class="toc-number">1.14.6.1.</span> <span class="toc-text">1. 商品查询</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E4%BC%98%E6%83%A0%E5%88%B8%E6%9F%A5%E8%AF%A2"><span class="toc-number">1.14.6.2.</span> <span class="toc-text">2. 优惠券查询</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#G-%E5%AE%A1%E6%A0%B8%E5%8E%86%E5%8F%B2%E8%A1%A8%E7%9A%84%E5%AE%8C%E6%95%B4%E5%86%99%E5%85%A5%E4%BD%8D%E7%BD%AE"><span class="toc-number">1.14.7.</span> <span class="toc-text">G. 审核历史表的完整写入位置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#H-%E6%95%B0%E6%8D%AE%E5%BA%93%E8%BF%81%E7%A7%BB%E6%96%87%E4%BB%B6%E6%94%BE%E7%BD%AE"><span class="toc-number">1.14.8.</span> <span class="toc-text">H. 数据库迁移文件放置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%BA%94%E3%80%81%E5%AE%9E%E7%8E%B0%E5%AE%8C%E6%88%90%E5%90%8E%E7%9A%84%E6%9C%80%E7%BB%88%E6%A3%80%E6%9F%A5"><span class="toc-number">1.15.</span> <span class="toc-text">十五、实现完成后的最终检查</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E5%85%AD%E3%80%81%E5%8F%AF%E7%9B%B4%E6%8E%A5%E7%85%A7%E7%9D%80%E5%AE%9E%E7%8E%B0%E7%9A%84-Service-%E6%96%B9%E6%B3%95%E6%A8%A1%E6%9D%BF"><span class="toc-number">1.16.</span> <span class="toc-text">十六、可直接照着实现的 Service 方法模板</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%95%86%E9%93%BA%E7%94%B3%E8%AF%B7%E6%8F%90%E4%BA%A4"><span class="toc-number">1.16.1.</span> <span class="toc-text">1. 商铺申请提交</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E9%80%9A%E8%BF%87"><span class="toc-number">1.16.2.</span> <span class="toc-text">2. 商品申请审核通过</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%99%AE%E9%80%9A%E4%BC%98%E6%83%A0%E5%88%B8%E5%88%9B%E5%BB%BA"><span class="toc-number">1.16.3.</span> <span class="toc-text">3. 普通优惠券创建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E7%A7%92%E6%9D%80%E5%88%B8%E7%9B%B4%E6%8E%A5%E5%88%9B%E5%BB%BA"><span class="toc-number">1.16.4.</span> <span class="toc-text">4. 秒杀券直接创建</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-Controller-%E4%B8%AD%E7%BB%9F%E4%B8%80%E8%A7%A3%E6%9E%90%E7%94%A8%E6%88%B7-id"><span class="toc-number">1.16.5.</span> <span class="toc-text">5. Controller 中统一解析用户 id</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%B8%83%E3%80%81%E7%8E%B0%E6%9C%89%E4%BB%A3%E7%A0%81%E7%9A%84%E5%88%A0%E9%99%A4-%E6%9B%BF%E6%8D%A2%E5%AF%B9%E7%85%A7%E8%A1%A8"><span class="toc-number">1.17.</span> <span class="toc-text">十七、现有代码的删除&#x2F;替换对照表</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E5%85%AB%E3%80%81%E4%B8%8D%E8%A6%81%E8%BF%99%E6%A0%B7%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.18.</span> <span class="toc-text">十八、不要这样实现</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88/" title="店铺、商品创建2"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="店铺、商品创建2"/></a><div class="content"><a class="title" href="/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88/" title="店铺、商品创建2">店铺、商品创建2</a><time datetime="2026-09-04T07:50:49.000Z" title="发表于 2026-09-04 15:50:49">2026-09-04</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0/" title="店铺、商品创建"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="店铺、商品创建"/></a><div class="content"><a class="title" href="/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%90%8E%E7%AB%AF%E6%94%B9%E9%80%A0/" title="店铺、商品创建">店铺、商品创建</a><time datetime="2026-09-04T07:49:49.000Z" title="发表于 2026-09-04 15:49:49">2026-09-04</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃商铺与商品申请审核前后端联调"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃商铺与商品申请审核前后端联调"/></a><div class="content"><a class="title" href="/2026/09/04/localfile/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃商铺与商品申请审核前后端联调">雀跃商铺与商品申请审核前后端联调</a><time datetime="2026-09-04T04:00:00.000Z" title="发表于 2026-09-04 12:00:00">2026-09-04</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/04/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃商铺与商品申请审核前后端联调"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃商铺与商品申请审核前后端联调"/></a><div class="content"><a class="title" href="/2026/09/04/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃商铺与商品申请审核前后端联调">雀跃商铺与商品申请审核前后端联调</a><time datetime="2026-09-04T04:00:00.000Z" title="发表于 2026-09-04 12:00:00">2026-09-04</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/02/%E5%B8%B8%E7%94%A8blog%E7%AC%A6%E5%8F%B7/" title="常用blog符号"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="常用blog符号"/></a><div class="content"><a class="title" href="/2026/09/02/%E5%B8%B8%E7%94%A8blog%E7%AC%A6%E5%8F%B7/" title="常用blog符号">常用blog符号</a><time datetime="2026-09-02T05:25:48.000Z" title="发表于 2026-09-02 13:25:48">2026-09-02</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/./img/3.jpg);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By specialweek4</span></div><div class="footer_custom_text">❀写下我想说的话，听我想听的歌。🎸🎶❀</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.4"></script></div></div></body></html>

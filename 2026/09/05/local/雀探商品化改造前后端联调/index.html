@@ -1,0 +1,689 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>雀探商品化改造前后端联调 | specialweek4博客</title><meta name="author" content="specialweek4"><meta name="copyright" content="specialweek4"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="本文用于说明雀探从“店铺发现”改为“商品发现”后的前后端联调路径。文中的方法名、DTO 和接口是本次改造建议的落点；当前代码中 ProductController 仍然直接调用 ProductMapper，联调前需要按本文把查询逻辑收敛到商品查询服务。本文只描述调用关系，不直接修改项目代码。 一 打开雀探商品发现页 前端访问 &#x2F;products，由 ProductListPage（可以先沿用现有">
+<meta property="og:type" content="article">
+<meta property="og:title" content="雀探商品化改造前后端联调">
+<meta property="og:url" content="https://specialweek4.github.io/2026/09/05/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81%E5%8C%96%E6%94%B9%E9%80%A0%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/index.html">
+<meta property="og:site_name" content="specialweek4博客">
+<meta property="og:description" content="本文用于说明雀探从“店铺发现”改为“商品发现”后的前后端联调路径。文中的方法名、DTO 和接口是本次改造建议的落点；当前代码中 ProductController 仍然直接调用 ProductMapper，联调前需要按本文把查询逻辑收敛到商品查询服务。本文只描述调用关系，不直接修改项目代码。 一 打开雀探商品发现页 前端访问 &#x2F;products，由 ProductListPage（可以先沿用现有">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://specialweek4.github.io/img/3.jpg">
+<meta property="article:published_time" content="2026-09-05T12:00:00.000Z">
+<meta property="article:modified_time" content="2026-09-05T12:36:11.113Z">
+<meta property="article:author" content="specialweek4">
+<meta property="article:tag" content="local">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://specialweek4.github.io/img/3.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "雀探商品化改造前后端联调",
+  "url": "https://specialweek4.github.io/2026/09/05/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81%E5%8C%96%E6%94%B9%E9%80%A0%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/",
+  "image": "https://specialweek4.github.io/img/3.jpg",
+  "datePublished": "2026-09-05T12:00:00.000Z",
+  "dateModified": "2026-09-05T12:36:11.113Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "specialweek4",
+      "url": "https://specialweek4.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://specialweek4.github.io/2026/09/05/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81%E5%8C%96%E6%94%B9%E9%80%A0%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '雀探商品化改造前后端联调',
+  isHighlightShrink: false,
+  isToc: false,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/./img/14.png);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">69</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">22</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">15</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/./img/3.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">specialweek4博客</span></a><a class="nav-page-title" href="/"><span class="site-name">雀探商品化改造前后端联调</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">雀探商品化改造前后端联调</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-05T12:00:00.000Z" title="发表于 2026-09-05 20:00:00">2026-09-05</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-05T12:36:11.113Z" title="更新于 2026-09-05 20:36:11">2026-09-05</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/local/">local</a></span></div><div class="meta-secondline"></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><p>本文用于说明雀探从“店铺发现”改为“商品发现”后的前后端联调路径。文中的方法名、DTO 和接口是本次改造建议的落点；当前代码中 ProductController 仍然直接调用 ProductMapper，联调前需要按本文把查询逻辑收敛到商品查询服务。本文只描述调用关系，不直接修改项目代码。</p>
+<p><strong>一 打开雀探商品发现页</strong></p>
+<p>前端访问 <code>/products</code>，由 <code>ProductListPage</code>（可以先沿用现有 <code>ShopListPage.tsx</code> 文件名）渲染商品列表。旧地址 <code>/shops</code> 建议保留兼容路由，跳转到 <code>/products</code>，这样旧书签不会失效。</p>
+<p>页面初始化时，<code>ProductListPage</code> 从 URL 读取 <code>q</code>、<code>categoryId</code>、<code>current</code>、<code>size</code>、<code>sort</code>。如果没有传参数，默认值为 <code>q=&quot;&quot;</code>、<code>categoryId=null</code>、<code>current=1</code>、<code>size=20</code>、<code>sort=&quot;newest&quot;</code>。</p>
+<p>然后前端调用 <code>productService.discover(q, categoryId, current, size, sort)</code>。该方法通过 <code>apiFetch</code> 发起：</p>
+<figure class="highlight http"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">GET /product/discover?q=拿铁&amp;categoryId=2&amp;current=1&amp;size=20&amp;sort=newest</span><br></pre></td></tr></table></figure>
+
+<p>后端请求进入 <code>ProductController.discover</code>。Controller 只负责接收参数和基础校验，不在 Controller 中直接调用 Mapper：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@GetMapping(&quot;/discover&quot;)</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">discover</span><span class="params">(</span></span><br><span class="line"><span class="params">        <span class="meta">@RequestParam(required = false)</span> String q,</span></span><br><span class="line"><span class="params">        <span class="meta">@RequestParam(required = false)</span> Long categoryId,</span></span><br><span class="line"><span class="params">        <span class="meta">@RequestParam(defaultValue = &quot;1&quot;)</span> <span class="type">int</span> current,</span></span><br><span class="line"><span class="params">        <span class="meta">@RequestParam(defaultValue = &quot;20&quot;)</span> <span class="type">int</span> size,</span></span><br><span class="line"><span class="params">        <span class="meta">@RequestParam(defaultValue = &quot;newest&quot;)</span> String sort)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> Result.ok(productQueryService.discover(q, categoryId, current, size, sort));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>ProductController.discover</code> 调用 <code>ProductQueryService.discover</code>。服务方法依次完成以下工作：</p>
+<ol>
+<li>调用 <code>normalizeQuery</code> 清理参数：<code>q.trim()</code>，空字符串转为 null；<code>current &lt; 1</code> 时改为 1；<code>size</code> 限制在 1 到 50；<code>sort</code> 只允许 <code>default</code>、<code>newest</code>、<code>priceAsc</code>、<code>priceDesc</code>。</li>
+<li>调用 <code>ProductCacheService.getDiscoverPage</code>，按“本机 Caffeine → Redis → MySQL”的顺序读取商品发现页。</li>
+<li>缓存未命中时调用 <code>ProductMapper.selectDiscoverPage</code>，一次查询商品卡片、商品分类和店铺摘要，不让前端为每个商品再发一次店铺请求。</li>
+<li>调用 <code>toProductCardResponse</code> 把 Mapper 返回行转换为 <code>ProductCardResponse</code>，只保留公开字段。</li>
+<li>组装分页信息并返回 <code>ProductDiscoverResponse</code>。</li>
+</ol>
+<p>商品查询 SQL 必须同时限制商品和店铺状态。只有 <code>p.status = 1</code> 且 <code>s.business_status = 1</code> 的数据才能进入公开发现页；分类停用时也不能继续作为公开筛选结果。</p>
+<p>前端收到 <code>Result.data</code> 后，将 <code>list</code> 放入商品卡片数组。商品卡片至少展示商品图片、名称、分类、价格、库存、店铺名称和商圈。点击卡片时执行 <code>navigate(</code>&#x2F;product&#x2F;${product.id}<code>)</code>，进入商品详情页。</p>
+<p>建议返回结构如下：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;success&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;list&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">      <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="number">101</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;shopId&quot;</span><span class="punctuation">:</span> <span class="number">8</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;冰美式&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="string">&quot;无糖冰咖啡&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;images&quot;</span><span class="punctuation">:</span> <span class="string">&quot;https://.../1.jpg&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;price&quot;</span><span class="punctuation">:</span> <span class="number">1800</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;stock&quot;</span><span class="punctuation">:</span> <span class="number">32</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;categoryId&quot;</span><span class="punctuation">:</span> <span class="number">2</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;categoryName&quot;</span><span class="punctuation">:</span> <span class="string">&quot;咖啡饮品&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;shop&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">          <span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="number">8</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;雀跃咖啡&quot;</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;images&quot;</span><span class="punctuation">:</span> <span class="string">&quot;https://.../shop.jpg&quot;</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;area&quot;</span><span class="punctuation">:</span> <span class="string">&quot;陆家嘴&quot;</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;address&quot;</span><span class="punctuation">:</span> <span class="string">&quot;世纪大道 100 号&quot;</span></span><br><span class="line">        <span class="punctuation">&#125;</span></span><br><span class="line">      <span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;current&quot;</span><span class="punctuation">:</span> <span class="number">1</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;size&quot;</span><span class="punctuation">:</span> <span class="number">20</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;hasMore&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>二 搜索商品</strong></p>
+<p>用户在 <code>SearchBar</code> 输入关键字并回车后，前端把地址改为 <code>/products?q=关键字</code>，同时将 <code>categoryId</code> 重置为空，避免上一次分类筛选继续生效。</p>
+<p>URL 变化触发 <code>ProductListPage</code> 的查询 effect。effect 先清空旧列表、把 <code>current</code> 重置为 1，再调用：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">productService.<span class="title function_">discover</span>(keyword, <span class="literal">null</span>, <span class="number">1</span>, <span class="number">20</span>, <span class="string">&quot;newest&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+<p>后端仍进入 <code>ProductController.discover → ProductQueryService.discover</code>。服务层将关键字标准化后传给 Mapper，搜索范围为商品 <code>name</code> 和 <code>description</code>：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">AND</span> (</span><br><span class="line">    #&#123;q&#125; <span class="keyword">IS</span> <span class="keyword">NULL</span> <span class="keyword">OR</span> #&#123;q&#125; <span class="operator">=</span> <span class="string">&#x27;&#x27;</span></span><br><span class="line">    <span class="keyword">OR</span> p.name <span class="keyword">LIKE</span> CONCAT(<span class="string">&#x27;%&#x27;</span>, #&#123;q&#125;, <span class="string">&#x27;%&#x27;</span>)</span><br><span class="line">    <span class="keyword">OR</span> p.description <span class="keyword">LIKE</span> CONCAT(<span class="string">&#x27;%&#x27;</span>, #&#123;q&#125;, <span class="string">&#x27;%&#x27;</span>)</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>查询参数必须使用 MyBatis 参数绑定，不能把关键字直接拼接到 SQL。没有结果时后端返回空的 <code>list</code> 和 <code>hasMore=false</code>，前端显示“没有找到相关商品”，不要把空结果当成请求异常。</p>
+<p><strong>三 按商品分类筛选</strong></p>
+<p>商品分类区域调用 <code>productService.categories()</code>，请求：</p>
+<figure class="highlight http"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">GET /product/categories</span><br></pre></td></tr></table></figure>
+
+<p>前端拿到分类后渲染分类按钮或下拉框。用户点击分类时，前端只更新 URL 中的 <code>categoryId</code> 和分类名称，然后重新从第 1 页加载：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="title function_">setSearchParams</span>(&#123;</span><br><span class="line">  <span class="attr">categoryId</span>: <span class="title class_">String</span>(category.<span class="property">id</span>),</span><br><span class="line">  <span class="attr">name</span>: category.<span class="property">name</span></span><br><span class="line">&#125;)</span><br></pre></td></tr></table></figure>
+
+<p>后端请求进入 <code>ProductCategoryController.list</code>，再调用 <code>ProductCategoryService.listEnabled</code>。该方法只返回 <code>enabled = 1</code> 的分类，并按 <code>sort ASC, id ASC</code> 排序。分类列表属于读多写少数据，可以使用 <code>qy:product:categories:v1</code> 缓存。</p>
+<p><code>ProductQueryService.discover</code> 收到 <code>categoryId</code> 后，先调用 <code>ProductCategoryService.requireEnabled(categoryId)</code> 校验分类仍处于启用状态；校验失败时返回“商品分类不存在或已停用”，不要执行商品 SQL。校验通过后，Mapper 增加：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">AND</span> p.category_id <span class="operator">=</span> #&#123;categoryId&#125;</span><br><span class="line"><span class="keyword">AND</span> c.enabled <span class="operator">=</span> <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<p>如果历史商品的 <code>category_id</code> 为空，迁移阶段应先回填到“其他”分类；回填完成前，服务层可以把缺失分类显示为“其他”，但不能把空分类 ID 当成有效筛选条件。</p>
+<p><strong>四 排序和分页加载</strong></p>
+<p>前端排序按钮把 <code>sort</code> 放入 URL，并重新请求第 1 页。排序值和数据库字段的映射必须由后端白名单控制：</p>
+<ul>
+<li><code>default</code>：<code>p.create_time DESC, p.id DESC</code></li>
+<li><code>newest</code>：<code>p.create_time DESC, p.id DESC</code></li>
+<li><code>priceAsc</code>：<code>p.price ASC, p.id DESC</code></li>
+<li><code>priceDesc</code>：<code>p.price DESC, p.id DESC</code></li>
+</ul>
+<p><code>ProductQueryService.toOrderBy(sort)</code> 只能从上述固定映射中返回 SQL 片段，不能直接把请求中的 <code>sort</code> 拼进 SQL。</p>
+<p>前端触底时，<code>useInfiniteScroll</code> 调用 <code>loadMore</code>。如果 <code>loadingRef.current</code> 或 <code>finished</code> 为 true，直接返回；否则请求 <code>current + 1</code>。成功后把新页追加到商品数组，并在 <code>hasMore=false</code> 时设置 <code>finished=true</code>。请求失败只提示“加载商品失败”，不能把已经显示的旧列表清空。</p>
+<p><strong>五 查看商品详情</strong></p>
+<p>用户点击商品卡片后，前端路由进入 <code>/product/:id</code>，由 <code>ProductDetailPage</code> 从 <code>useParams</code> 取得商品 ID，然后调用：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">productService.<span class="title function_">detail</span>(id)</span><br></pre></td></tr></table></figure>
+
+<p>请求为：</p>
+<figure class="highlight http"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">GET /product/101</span><br></pre></td></tr></table></figure>
+
+<p>请求进入 <code>ProductController.queryProductById</code>。改造后该方法不再直接执行 <code>productMapper.selectById(id)</code>，而是调用 <code>ProductQueryService.detail(id)</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@GetMapping(&quot;/&#123;id&#125;&quot;)</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">queryProductById</span><span class="params">(<span class="meta">@PathVariable(&quot;id&quot;)</span> <span class="type">long</span> id)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> Result.ok(productQueryService.detail(id));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>ProductQueryService.detail</code> 的调用顺序如下：</p>
+<ol>
+<li>调用 <code>ProductCacheService.getDetail(id)</code> 读取商品详情缓存。</li>
+<li>缓存未命中时调用 <code>ProductMapper.selectPublicDetailById(id)</code>，联表读取商品、启用分类和店铺公开字段。</li>
+<li>校验商品 <code>status = 1</code>；商品下架时返回“商品不存在或已下架”。</li>
+<li>校验店铺 <code>business_status = 1</code>；店铺关闭时同样不返回公开商品详情。</li>
+<li>将数据库行组装为 <code>ProductDetailResponse</code>，其中店铺使用 <code>ShopSummary</code>，不直接序列化完整的 <code>Shop</code> 实体。</li>
+<li>写入商品详情缓存后返回前端。</li>
+</ol>
+<p>商品详情返回结构建议如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">ProductDetailResponse</span><span class="params">(</span></span><br><span class="line"><span class="params">        Long id,</span></span><br><span class="line"><span class="params">        Long shopId,</span></span><br><span class="line"><span class="params">        String name,</span></span><br><span class="line"><span class="params">        String description,</span></span><br><span class="line"><span class="params">        String images,</span></span><br><span class="line"><span class="params">        Long price,</span></span><br><span class="line"><span class="params">        Integer stock,</span></span><br><span class="line"><span class="params">        Integer status,</span></span><br><span class="line"><span class="params">        Long categoryId,</span></span><br><span class="line"><span class="params">        String categoryName,</span></span><br><span class="line"><span class="params">        ShopSummary shop)</span> &#123;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">ShopSummary</span><span class="params">(</span></span><br><span class="line"><span class="params">        Long id,</span></span><br><span class="line"><span class="params">        String name,</span></span><br><span class="line"><span class="params">        String images,</span></span><br><span class="line"><span class="params">        String area,</span></span><br><span class="line"><span class="params">        String address,</span></span><br><span class="line"><span class="params">        Integer businessStatus)</span> &#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>前端详情页根据 <code>images</code> 渲染图片，根据 <code>price</code>、<code>stock</code>、<code>categoryName</code> 渲染商品信息。店铺卡片使用 <code>shop.id</code> 跳转 <code>/shop/${shop.id}</code>，不要根据店铺名称再次搜索店铺。</p>
+<p>如果接口返回 404 或“商品不存在或已下架”，前端显示商品不可用页面，并提供返回雀探按钮。不要在详情页继续渲染旧缓存对象。</p>
+<p><strong>六 从商品详情进入店铺</strong></p>
+<p>商品详情页的店铺卡片点击后进入现有 <code>/shop/:id</code> 路由，由 <code>ShopDetailPage</code> 渲染店铺详情。店铺详情的店铺主体仍由现有店铺接口提供，后端调用关系为：</p>
+<p>前端访问 <code>GET /shop/${shopId}</code>，调用 <code>ShopController.queryById</code>，再调用 <code>ShopServiceImpl.queryById</code>。</p>
+<p><code>ShopServiceImpl.queryById</code> 调用 <code>shopCacheClient.queryWithPassThrough</code>：</p>
+<ol>
+<li>先读取 <code>cache:shop:${shopId}</code>。</li>
+<li>Redis 有正常 JSON 时反序列化为 <code>Shop</code> 并返回。</li>
+<li>Redis 命中空值标记时直接返回不存在。</li>
+<li>Redis 未命中时执行 <code>ShopServiceImpl.getById</code> 回源 MySQL。</li>
+<li>数据库无记录时写入短 TTL 空值，防止缓存穿透。</li>
+<li>数据库有记录时写入店铺缓存，并返回店铺数据。</li>
+<li><code>businessStatus = 3</code> 时对外仍返回“店铺不存在”。</li>
+</ol>
+<p>店铺详情页加载本店商品时调用 <code>productService.listOfShop(shopId)</code>，请求 <code>GET /product/list/${shopId}</code>。该接口只返回当前店铺 <code>status = 1</code> 的商品；如果店铺已经关闭，建议后端直接返回店铺不可用，前端不再展示商品列表。</p>
+<p><strong>七 商品分类与商品申请</strong></p>
+<p>商家中心的商品申请表单增加分类下拉框。页面初始化时调用 <code>productService.categories()</code>，只允许选择 <code>enabled = 1</code> 的分类。提交时形成：</p>
+<figure class="highlight typescript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> <span class="attr">payload</span>: <span class="title class_">ProductApplyPayload</span> = &#123;</span><br><span class="line">  categoryId,</span><br><span class="line">  name,</span><br><span class="line">  description,</span><br><span class="line">  images,</span><br><span class="line">  price,</span><br><span class="line">  stock</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>前端访问商家商品申请接口，进入 <code>ProductApplicationController.apply</code>，Controller 从登录态 JWT 解析用户 ID 和角色后调用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">productApplicationService.apply(shopId, request, userId, role)</span><br></pre></td></tr></table></figure>
+
+<p><code>ProductApplicationServiceImpl.apply</code> 的方法作用和调用顺序为：</p>
+<ol>
+<li>使用 <code>lock:submit:product:{userId}:{shopId}</code> 做短时重复提交保护。</li>
+<li>通过 <code>shopMapper.selectById(shopId)</code> 查询店铺，确认店铺存在且 <code>businessStatus = 1</code>。</li>
+<li>非管理员时校验 <code>shop.ownerUserId = userId</code>。</li>
+<li>调用 <code>productCategoryService.requireEnabled(request.categoryId())</code>，确认分类有效。</li>
+<li>把请求 DTO 转换为 <code>ProductApplication</code>，保存 <code>categoryId</code>、名称、图片、价格、库存和 <code>auditStatus = 0</code>。</li>
+<li>调用 <code>applicationMapper.insert(app)</code>，返回申请 ID。</li>
+</ol>
+<p>商品申请修改接口的调用关系与提交相同：Controller 调用 <code>ProductApplicationServiceImpl.update</code>，服务方法先查询申请并校验申请人，再重新校验分类启用状态，更新 <code>categoryId</code> 和其他字段，并把审核状态重置为待审核。</p>
+<p>当前代码的 <code>ProductApplicationServiceImpl.apply/update</code> 尚未写入 <code>categoryId</code>；联调时如果前端已经发送该字段而后端未补实体和数据库列，申请会出现“请求成功但分类丢失”的问题，应优先检查这一点。</p>
+<p><strong>八 管理员审核商品</strong></p>
+<p>管理员在后台打开商品申请列表，前端调用商品申请列表接口，后端进入 <code>ProductApplicationServiceImpl.listForAdmin</code>，按 <code>auditStatus</code> 和创建时间分页返回申请记录。</p>
+<p>管理员点击通过时，前端访问审核接口并发送：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;approved&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;reason&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&quot;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>后端进入 <code>ProductApplicationServiceImpl.audit</code>。通过分支的调用关系为：</p>
+<ol>
+<li><code>applicationMapper.selectById(id)</code> 查询待审核申请，并确认 <code>auditStatus = 0</code>。</li>
+<li><code>ossStorageService.confirmImages</code> 确认申请图片已经正式入 OSS。</li>
+<li>创建 <code>Product</code>，复制 <code>shopId</code>、<code>createdBy</code>、名称、描述、图片、价格、库存和 <code>categoryId</code>。</li>
+<li>调用 <code>productMapper.insert(product)</code> 写入正式商品。</li>
+<li>调用 <code>applicationMapper.approve(id, adminId, product.getId())</code> 更新申请状态和正式商品 ID。</li>
+<li>写入 <code>AuditRecord</code>，记录 PRODUCT 的审核流转。</li>
+<li>事务成功提交后，删除商品发现页和相关详情缓存。</li>
+<li>返回正式商品 ID。</li>
+</ol>
+<p>当前实现审核通过时把新商品状态设为 <code>2)，而公开接口只返回状态为 </code>1) 的商品。联调必须确认产品规则：如果 <code>2) 代表“待上架”，则审核通过后还需要管理员或店主调用上架接口；如果 </code>2) 代表“已上架)，则应统一修改状态判断，不能让审核通过商品长期不可见。</p>
+<p>拒绝分支要求 <code>reason</code> 非空，调用 <code>applicationMapper.reject</code>，只更新申请审核状态和拒绝原因，不创建正式商品，也不删除商品详情缓存。</p>
+<p><strong>九 商品上架和下架</strong></p>
+<p>商家或管理员在商品管理页点击上架&#x2F;下架时，前端发送商品 ID 和目标状态，后端进入 <code>ProductApplicationController.changeStatus</code>，再调用 <code>ProductApplicationServiceImpl.changeStatus</code>。</p>
+<p><code>changeStatus</code> 依次完成：</p>
+<ol>
+<li>只允许状态值 <code>1)（上架）或 </code>2)（下架）。</li>
+<li>通过 <code>productMapper.selectById(id)</code> 查询商品。</li>
+<li>通过 <code>shopMapper.selectById(product.shopId)</code> 查询店铺。</li>
+<li>非管理员时校验当前用户是店主。</li>
+<li>修改 <code>product.status</code> 并调用 <code>productMapper.updateById(product)</code>。</li>
+<li>事务提交成功后删除商品详情键、商品发现页版本号和本机 Caffeine。</li>
+</ol>
+<p>上架后，商品应能在 <code>GET /product/discover</code> 和 <code>GET /product/{id}</code> 中出现；下架后两个公开接口都必须拒绝或过滤该商品。联调时要分别验证列表和详情，不能只验证管理后台的状态字段。</p>
+<p><strong>十 商品详情和发现页缓存读取</strong></p>
+<p>商品详情缓存键建议为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qy:product:detail:v1:&#123;productId&#125;</span><br></pre></td></tr></table></figure>
+
+<p>商品发现页缓存键建议为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qy:product:discover:v1:&#123;version&#125;:&#123;hash(q,categoryId,sort,page,size)&#125;</span><br></pre></td></tr></table></figure>
+
+<p>分类缓存键为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qy:product:categories:v1</span><br></pre></td></tr></table></figure>
+
+<p><code>ProductCacheService.getDetail</code> 的读取调用关系如下：</p>
+<p>前端 <code>ProductDetailPage</code> → <code>productService.detail</code> → <code>ProductController.queryProductById</code> → <code>ProductQueryService.detail</code> → <code>ProductCacheService.getDetail</code>。</p>
+<p><code>getDetail</code> 先查 Caffeine；本机未命中再查 Redis。Redis 命中正常 JSON 时反序列化为 <code>ProductDetailResponse</code>，并回填 Caffeine。Redis 命中空值标记时直接返回商品不存在，避免反复打数据库。Redis 未命中时使用 singleFlight 或商品 ID 互斥锁，只允许一个请求调用 <code>ProductMapper.selectPublicDetailById</code>；其余并发请求等待结果或读取回填后的缓存。回源为空写短 TTL 空值，回源成功写 Redis 和 Caffeine。</p>
+<p><code>ProductCacheService.getDiscoverPage</code> 的关系相同，但查询键由完整筛选条件组成。发现页不建议枚举所有 q 和分页键做精确删除，而是让 Redis 保存 <code>qy:product:discover:version</code>。每次商品审核通过、上架、下架或分类变化时执行 INCR，下一次查询自然生成新版本键；本机 Caffeine 同时执行 <code>invalidateAll</code>。</p>
+<p>缓存读取时只缓存公开、相对稳定的字段。登录用户状态、优惠券领取状态、库存扣减结果和临时活动价格必须实时读取，不能放进长 TTL 商品详情缓存。</p>
+<p><strong>十一 缓存失效调用关系</strong></p>
+<p>商品审核通过、商品上架、商品下架或商品编辑成功后，调用统一的 <code>ProductCacheInvalidationService</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">productCacheInvalidationService.evictProduct(productId, shopId);</span><br></pre></td></tr></table></figure>
+
+<p>该方法执行：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">redis.delete(<span class="string">&quot;qy:product:detail:v1:&quot;</span> + productId);</span><br><span class="line">redis.opsForValue().increment(<span class="string">&quot;qy:product:discover:version&quot;</span>);</span><br><span class="line">productDiscoverLocalCache.invalidateAll();</span><br></pre></td></tr></table></figure>
+
+<p>如果商品编辑影响了店铺 ID 或商品分类，还要删除旧店铺&#x2F;旧分类相关发现页版本。失效操作应在事务提交成功后执行；不能在数据库事务尚未提交时先删缓存，否则事务回滚后会造成短暂的缓存空窗。</p>
+<p>店铺资料、营业状态或店铺名称修改成功后，调用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">shopCacheClient.delete(CACHE_SHOP_KEY + shopId);</span><br><span class="line">productCacheInvalidationService.evictShopProducts(shopId);</span><br></pre></td></tr></table></figure>
+
+<p><code>evictShopProducts</code> 可以按 <code>shop_id</code> 查询受影响商品 ID，再删除对应详情键；发现页统一通过版本号失效。店铺关闭时，即使商品自身 <code>status = 1)，公开发现和详情接口也必须因为 </code>business_status !&#x3D; 1) 而不可见。</p>
+<p>当前 <code>ProductApplicationServiceImpl</code> 只删除 <code>CACHE_PRODUCT_LIST_KEY + shopId</code>，而公开 <code>ProductController</code> 没有读取这个缓存键。联调时如果仍保留该删除逻辑，必须同时把按店铺商品列表接入同一缓存服务；否则应统一迁移到新的商品缓存键，避免“只删不读”。</p>
+<p><strong>十二 前端错误处理和接口约定</strong></p>
+<p>前端 <code>apiFetch</code> 统一处理 <code>Result.success</code>。以下情况应按业务错误显示提示，不要当成程序异常：</p>
+<ul>
+<li>商品不存在、商品下架或所属店铺关闭：显示商品不可用。</li>
+<li>分类不存在或已停用：清空当前分类并提示重新选择。</li>
+<li>商家无权发布商品：显示无权操作。</li>
+<li>商品申请重复提交：显示“请勿重复提交”。</li>
+<li>审核拒绝：在申请列表展示 <code>rejectReason</code>，不跳转商品详情。</li>
+</ul>
+<p>公开商品接口的返回 DTO 不应包含 <code>ownerUserId</code>、审核人、申请人、内部审核状态等后台字段。搜索参数、排序参数和分页参数由后端再次校验，不能只依赖前端限制。</p>
+<p><strong>十三 联调顺序</strong></p>
+<p>先执行数据库迁移，创建 <code>tb_product_category)，给 </code>tb_product<code>和</code>tb_product_application<code>增加</code>category_id&#96;，插入“其他”分类并回填历史数据。</p>
+<p>然后发布后端兼容版本：先让商品详情、商品发现和分类接口能够读取 &#96;category_id)，旧商品缺失分类时显示“其他”；再接入 Redis&#x2F;Caffeine 商品缓存和缓存指标。</p>
+<p>后端接口稳定后接入前端 <code>productService.categories</code>、<code>discover</code>、<code>detail</code>，先完成商品详情页，再将雀探列表切换为商品列表。保留 <code>/shops</code> 和 <code>/shop/:id</code> 兼容旧链接。</p>
+<p>最后联调商家申请、管理员审核、商品上下架和店铺资料修改，重点观察缓存失效是否在事务提交后执行，以及审核通过商品的状态是否真的能进入公开接口。</p>
+<p><strong>十四 联调验收</strong></p>
+<p><strong>商品发现</strong></p>
+<p>前端打开 <code>/products</code> 能调用 <code>GET /product/discover</code>；关键字、分类、排序和分页参数都能在 Network 面板中看到；列表只显示上架且营业中的商品；触底只加载下一页，不重复加载。</p>
+<p><strong>商品详情</strong></p>
+<p>点击商品卡片能调用 <code>GET /product/{id}</code>；详情包含 <code>categoryName</code> 和 <code>shop</code>；点击店铺卡片能进入 <code>/shop/{shopId}</code>；商品下架或店铺关闭后，刷新详情页得到不可用提示。</p>
+<p><strong>分类</strong></p>
+<p><code>GET /product/categories</code> 只返回启用分类；分类停用后前端刷新不再显示；商品发现接口不会返回停用分类下的商品。</p>
+<p><strong>商家和审核</strong></p>
+<p>商家提交申请时请求体带 <code>categoryId</code>；后端保存申请分类；修改申请会重新校验分类；管理员通过后正式商品继承分类；拒绝时必须填写原因。</p>
+<p><strong>缓存</strong></p>
+<p>第一次请求可以看到数据库回源，第二次请求命中 Redis，同一实例热点请求命中 Caffeine；并发冷启动只有一次 MySQL 查询；空结果不会持续穿透数据库；审核、上下架、分类修改和店铺修改后，详情及发现页最终读到新数据。</p>
+<p><strong>兼容和安全</strong></p>
+<p>旧 <code>/shops</code> 地址仍可用；店铺详情和商家店铺类型流程不受影响；公开接口不泄露后台字段；排序和搜索使用参数绑定；缓存中没有用户登录态和抢购库存。</p>
+<p><strong>十五 主要代码位置</strong></p>
+<p>后端商品控制器：<code>D:\queping\queyue_be-main\src\main\java\com\specialweek\product\api\ProductController.java</code></p>
+<p>后端商品实体：<code>D:\queping\queyue_be-main\src\main\java\com\specialweek\product\domain\Product.java</code></p>
+<p>后端商品申请服务：<code>D:\queping\queyue_be-main\src\main\java\com\specialweek\product\service\impl\ProductApplicationServiceImpl.java</code></p>
+<p>后端商品 Mapper：<code>D:\queping\queyue_be-main\src\main\java\com\specialweek\product\mapper\ProductMapper.java</code></p>
+<p>后端店铺缓存客户端：<code>D:\queping\queyue_be-main\src\main\java\com\specialweek\shop\util\shopCacheClient.java</code></p>
+<p>前端商品服务：<code>D:\queping\queyue_fe\src\services\productService.ts</code></p>
+<p>前端雀探列表：<code>D:\queping\queyue_fe\src\pages\ShopListPage.tsx</code></p>
+<p>前端店铺详情：<code>D:\queping\queyue_fe\src\pages\ShopDetailPage.tsx</code></p>
+<p>前端路由：<code>D:\queping\queyue_fe\src\App.tsx</code></p>
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/local/">local</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/09/05/local/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃三级缓存2"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">雀跃三级缓存2</div></div><div class="info-2"><div class="info-item-1">雀跃 Feed 三级缓存后端代码设计与讲解（知光风格版） 适用范围：仅后端 queyue_be-main。本次改造目标：把热榜三级缓存的结构与方法名对齐知光（zhiguang_be-main 的KnowPostFeedServiceImpl &#x2F; CacheConfig &#x2F; CacheProperties），同时保留雀跃文档要求（前 3 页缓存、返回前覆盖实时计数与用户态、点赞不失效缓存、检查点批次后失效一次），并不做“以后再添加”清单中的内容（热点检测动态 TTL、Redis Pub&#x2F;Sub、关注 Feed 缓存等）。 代码位置：  com.specialweek.cache.config —— CacheConfig（Caffeine bean）、CacheProperties com.specialweek.blog.api.dto —— FeedItemResponse、FeedPageResponse com.specialweek.blog.model —— BlogFeedRow com.specialweek.blog.service(...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/05/local/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E4%B8%8A%E4%BC%A0%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88/" title="雀跃商铺与商品图片上传OSS改造方案（照抄可落地）"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-05</div><div class="info-item-2">雀跃商铺与商品图片上传OSS改造方案（照抄可落地）</div></div><div class="info-2"><div class="info-item-1">雀跃商铺与商品图片上传 OSS 改造方案（照抄可落地）目标：商铺申请、商铺修改申请、商品申请的”图片”从手填 URL 改为像 blog 一样的 OSS 预签名直传。  说明：UploadController(/upload/blog) 是本地落盘方案，前端现在实际没有用它。blog 前端走的是storageService.presign → putObject(浏览器直传OSS) → confirm(临时区搬正式区) 这套 OSS 流程，本方案完全对齐这套链路。  零、先说结论   部分 要不要改 说明    数据库 不用改 tb_shop_application.images、tb_shop.images、tb_product_application.images、tb_product.images 已存在，存逗号分隔的 OSS 正式 URL（如 https://qytest4.oss-cn-hangzhou.aliyuncs.com/shops/...）   后端 要改 给 StorageController 增加商铺&#x2F;商品专用的 presign、confirm 共...</div></div></div></a><a class="pagination-related" href="/2026/09/05/local/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃三级缓存2"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-05</div><div class="info-item-2">雀跃三级缓存2</div></div><div class="info-2"><div class="info-item-1">雀跃 Feed 三级缓存后端代码设计与讲解（知光风格版） 适用范围：仅后端 queyue_be-main。本次改造目标：把热榜三级缓存的结构与方法名对齐知光（zhiguang_be-main 的KnowPostFeedServiceImpl &#x2F; CacheConfig &#x2F; CacheProperties），同时保留雀跃文档要求（前 3 页缓存、返回前覆盖实时计数与用户态、点赞不失效缓存、检查点批次后失效一次），并不做“以后再添加”清单中的内容（热点检测动态 TTL、Redis Pub&#x2F;Sub、关注 Feed 缓存等）。 代码位置：  com.specialweek.cache.config —— CacheConfig（Caffeine bean）、CacheProperties com.specialweek.blog.api.dto —— FeedItemResponse、FeedPageResponse com.specialweek.blog.model —— BlogFeedRow com.specialweek.blog.service(...</div></div></div></a><a class="pagination-related" href="/2026/09/05/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81%E5%8C%96%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88%E4%B8%8E%E5%90%8E%E7%AB%AF%E6%95%B0%E6%8D%AE%E5%BA%93%E7%BC%93%E5%AD%98%E5%AE%9E%E6%96%BD%E8%AF%B4%E6%98%8E/" title="雀跃热门商品页缓存"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-05</div><div class="info-item-2">雀跃热门商品页缓存</div></div><div class="info-2"><div class="info-item-1">雀探商品化改造方案与后端数据库缓存实施说明适用项目：D:\queping\queyue_be-main 与 D:\queping\queyue_fe目标：将雀探前台从“店铺发现”调整为“商品发现”，商品详情可回到店铺，并补齐商品分类与缓存读取策略。本文只提供改造说明，不修改现有源代码和数据库。 一 结论与边界建议把“雀探”定义为商品发现入口，而不是把店铺领域整体删除。商品是列表和搜索的主体，商品详情页展示商品信息并提供店铺卡片；店铺详情仍保留，作为从商品详情进入店铺、查看店铺地址与优惠券的承载页。 店铺分类是否去掉：建议先去掉雀探前台的店铺分类筛选、分类图标和分类文案，不立即删除 tb_shop.type_id、tb_shop_type 以及商家端店铺类型字段。现有商铺申请审核会校验 typeId，直接删列会影响商家中心、审核和历史数据。待确认店铺分类在业务上完全废弃后，再按迁移阶段删除。 本文假定商品分类是平台级分类（例如咖啡、正餐、甜品），一个商品只有一个主分类。若将来需要多分类，再增加中间表，不要把逗号分隔的分类 ID 放进商品表。 二 当前代码现状与改造切入点   区域 ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">specialweek4</div><div class="author-info-description">specialweek4的博客,记录我的学习和生活点滴</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">69</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">22</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">15</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/specialweek4"><i class="fab fa-github"></i><span>关注我</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/specialweek4" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:504957307@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">❀Specialweek Blog❀ 记录我的学习和生活，分享我喜欢的东西。🎸🎶❀</div></div><div class="sticky_layout"><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/09/05/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81%E5%8C%96%E6%94%B9%E9%80%A0%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀探商品化改造前后端联调"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀探商品化改造前后端联调"/></a><div class="content"><a class="title" href="/2026/09/05/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81%E5%8C%96%E6%94%B9%E9%80%A0%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀探商品化改造前后端联调">雀探商品化改造前后端联调</a><time datetime="2026-09-05T12:00:00.000Z" title="发表于 2026-09-05 20:00:00">2026-09-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/05/local/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃三级缓存2"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃三级缓存2"/></a><div class="content"><a class="title" href="/2026/09/05/local/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃三级缓存2">雀跃三级缓存2</a><time datetime="2026-09-05T02:21:41.000Z" title="发表于 2026-09-05 10:21:41">2026-09-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/05/local/%E9%9B%80%E8%B7%83%E6%8E%A5%E5%85%A5%E7%9F%A5%E5%85%89Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%AF%E8%A1%8C%E6%80%A7%E5%88%86%E6%9E%90/" title="雀跃热门笔记三级缓存"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃热门笔记三级缓存"/></a><div class="content"><a class="title" href="/2026/09/05/local/%E9%9B%80%E8%B7%83%E6%8E%A5%E5%85%A5%E7%9F%A5%E5%85%89Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%AF%E8%A1%8C%E6%80%A7%E5%88%86%E6%9E%90/" title="雀跃热门笔记三级缓存">雀跃热门笔记三级缓存</a><time datetime="2026-09-05T01:20:41.000Z" title="发表于 2026-09-05 09:20:41">2026-09-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/05/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81%E5%8C%96%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88%E4%B8%8E%E5%90%8E%E7%AB%AF%E6%95%B0%E6%8D%AE%E5%BA%93%E7%BC%93%E5%AD%98%E5%AE%9E%E6%96%BD%E8%AF%B4%E6%98%8E/" title="雀跃热门商品页缓存"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃热门商品页缓存"/></a><div class="content"><a class="title" href="/2026/09/05/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81%E5%8C%96%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88%E4%B8%8E%E5%90%8E%E7%AB%AF%E6%95%B0%E6%8D%AE%E5%BA%93%E7%BC%93%E5%AD%98%E5%AE%9E%E6%96%BD%E8%AF%B4%E6%98%8E/" title="雀跃热门商品页缓存">雀跃热门商品页缓存</a><time datetime="2026-09-05T01:20:41.000Z" title="发表于 2026-09-05 09:20:41">2026-09-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/05/local/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E4%B8%8A%E4%BC%A0%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88/" title="雀跃商铺与商品图片上传OSS改造方案（照抄可落地）"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃商铺与商品图片上传OSS改造方案（照抄可落地）"/></a><div class="content"><a class="title" href="/2026/09/05/local/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E5%9B%BE%E7%89%87%E4%B8%8A%E4%BC%A0%E6%94%B9%E9%80%A0%E6%96%B9%E6%A1%88/" title="雀跃商铺与商品图片上传OSS改造方案（照抄可落地）">雀跃商铺与商品图片上传OSS改造方案（照抄可落地）</a><time datetime="2026-09-04T16:00:00.000Z" title="发表于 2026-09-05 00:00:00">2026-09-05</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/./img/3.jpg);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By specialweek4</span></div><div class="footer_custom_text">❀写下我想说的话，听我想听的歌。🎸🎶❀</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.4"></script></div></div></body></html>

@@ -1,0 +1,965 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>雀跃关注模块后端代码设计与讲解 | specialweek4博客</title><meta name="author" content="specialweek4"><meta name="copyright" content="specialweek4"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="雀跃关注关系、关注状态缓存、共同关注与关注动态Feed的后端代码设计和调用链说明">
+<meta property="og:type" content="article">
+<meta property="og:title" content="雀跃关注模块后端代码设计与讲解">
+<meta property="og:url" content="https://specialweek4.github.io/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%85%B3%E6%B3%A8%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/index.html">
+<meta property="og:site_name" content="specialweek4博客">
+<meta property="og:description" content="雀跃关注关系、关注状态缓存、共同关注与关注动态Feed的后端代码设计和调用链说明">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://specialweek4.github.io/img/3.jpg">
+<meta property="article:published_time" content="2026-09-12T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-09-12T06:22:22.304Z">
+<meta property="article:author" content="specialweek4">
+<meta property="article:tag" content="雀跃">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://specialweek4.github.io/img/3.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "雀跃关注模块后端代码设计与讲解",
+  "url": "https://specialweek4.github.io/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%85%B3%E6%B3%A8%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/",
+  "image": "https://specialweek4.github.io/img/3.jpg",
+  "datePublished": "2026-09-12T04:00:00.000Z",
+  "dateModified": "2026-09-12T06:22:22.304Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "specialweek4",
+      "url": "https://specialweek4.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://specialweek4.github.io/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%85%B3%E6%B3%A8%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '雀跃关注模块后端代码设计与讲解',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/./img/14.png);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">68</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">22</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">15</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/./img/3.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">specialweek4博客</span></a><a class="nav-page-title" href="/"><span class="site-name">雀跃关注模块后端代码设计与讲解</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">雀跃关注模块后端代码设计与讲解</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-12T04:00:00.000Z" title="发表于 2026-09-12 12:00:00">2026-09-12</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-12T06:22:22.304Z" title="更新于 2026-09-12 14:22:22">2026-09-12</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E9%9B%80%E8%B7%83/">雀跃</a></span></div><div class="meta-secondline"></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="雀跃关注模块后端代码设计与讲解"><a href="#雀跃关注模块后端代码设计与讲解" class="headerlink" title="雀跃关注模块后端代码设计与讲解"></a>雀跃关注模块后端代码设计与讲解</h1><p>本文对应当前 <code>D:\queping\queyue_be-main</code> 后端代码，讲解关注关系、关注状态缓存、粉丝与关注计数、共同关注和关注动态 Feed 的实现。</p>
+<p>本文只解释当前后端代码，不修改源代码。接口、方法名称和行为均以当前项目为准。</p>
+<h2 id="一、关注模块解决什么问题"><a href="#一、关注模块解决什么问题" class="headerlink" title="一、关注模块解决什么问题"></a>一、关注模块解决什么问题</h2><p>关注模块不只是完成“点击关注”这一个动作，它同时承担四类职责：</p>
+<ol>
+<li>在 MySQL 中保存用户之间真实的关注关系；</li>
+<li>幂等地维护用户的关注数和粉丝数；</li>
+<li>在 Redis 中缓存当前用户是否关注某个作者，减少列表页反复查询数据库；</li>
+<li>根据关注关系查询关注用户发布的博客，并通过滚动分页返回关注动态。</li>
+</ol>
+<p>当前整体结构是：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">关注/取消关注写请求</span><br><span class="line">    -&gt; FollowController</span><br><span class="line">    -&gt; FollowServiceImpl 事务</span><br><span class="line">    -&gt; tb_follow 写入或删除关系</span><br><span class="line">    -&gt; tb_user_info 更新 followee/fans</span><br><span class="line">    -&gt; 事务提交后更新 Redis 关注状态缓存</span><br><span class="line"></span><br><span class="line">关注状态读取</span><br><span class="line">    -&gt; FollowStateService</span><br><span class="line">    -&gt; Redis qy:state:follow:&#123;userId&#125;:&#123;targetUserId&#125;</span><br><span class="line">    -&gt; 缓存未命中时查询 tb_follow</span><br><span class="line">    -&gt; 回填 Redis</span><br><span class="line"></span><br><span class="line">关注动态</span><br><span class="line">    -&gt; BlogController</span><br><span class="line">    -&gt; BlogServiceImpl</span><br><span class="line">    -&gt; BlogMapper 查询 tb_follow + tb_blog</span><br><span class="line">    -&gt; 补作者、计数、点赞收藏和关注状态</span><br><span class="line">    -&gt; ScrollResult 返回</span><br></pre></td></tr></table></figure>
+
+<h2 id="二、涉及的主要代码"><a href="#二、涉及的主要代码" class="headerlink" title="二、涉及的主要代码"></a>二、涉及的主要代码</h2><table>
+<thead>
+<tr>
+<th>职责</th>
+<th>文件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>关注接口入口</td>
+<td><code>src/main/java/com/specialweek/follow/api/FollowController.java</code></td>
+</tr>
+<tr>
+<td>关注业务接口</td>
+<td><code>src/main/java/com/specialweek/follow/service/IFollowService.java</code></td>
+</tr>
+<tr>
+<td>关注写事务</td>
+<td><code>src/main/java/com/specialweek/follow/service/impl/FollowServiceImpl.java</code></td>
+</tr>
+<tr>
+<td>关注状态缓存</td>
+<td><code>src/main/java/com/specialweek/follow/service/FollowStateService.java</code></td>
+</tr>
+<tr>
+<td>关注关系 Mapper</td>
+<td><code>src/main/java/com/specialweek/follow/mapper/FollowMapper.java</code></td>
+</tr>
+<tr>
+<td>关注关系 SQL</td>
+<td><code>src/main/resources/mapper/FollowMapper.xml</code></td>
+</tr>
+<tr>
+<td>关注关系实体</td>
+<td><code>src/main/java/com/specialweek/follow/domain/Follow.java</code></td>
+</tr>
+<tr>
+<td>关注结果 DTO</td>
+<td><code>src/main/java/com/specialweek/follow/dto/FollowActionResponse.java</code></td>
+</tr>
+<tr>
+<td>用户统计 Mapper</td>
+<td><code>src/main/java/com/specialweek/user/mapper/UserInfoMapper.java</code></td>
+</tr>
+<tr>
+<td>用户统计 SQL</td>
+<td><code>src/main/resources/mapper/UserInfoMapper.xml</code></td>
+</tr>
+<tr>
+<td>关注动态入口</td>
+<td><code>src/main/java/com/specialweek/blog/api/BlogController.java</code></td>
+</tr>
+<tr>
+<td>关注动态业务</td>
+<td><code>src/main/java/com/specialweek/blog/service/impl/BlogServiceImpl.java</code></td>
+</tr>
+<tr>
+<td>关注动态 SQL</td>
+<td><code>src/main/resources/mapper/BlogMapper.xml</code></td>
+</tr>
+</tbody></table>
+<h2 id="三、数据库表设计"><a href="#三、数据库表设计" class="headerlink" title="三、数据库表设计"></a>三、数据库表设计</h2><h3 id="3-1-tb-follow-关注关系表"><a href="#3-1-tb-follow-关注关系表" class="headerlink" title="3.1 tb_follow 关注关系表"></a>3.1 <code>tb_follow</code> 关注关系表</h3><p>当前建表结构的核心部分是：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> `tb_follow` (</span><br><span class="line">    `id` <span class="type">bigint</span> <span class="keyword">NOT NULL</span> AUTO_INCREMENT COMMENT <span class="string">&#x27;主键&#x27;</span>,</span><br><span class="line">    `user_id` <span class="type">bigint</span> unsigned <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;用户id&#x27;</span>,</span><br><span class="line">    `follow_user_id` <span class="type">bigint</span> unsigned <span class="keyword">NOT NULL</span> COMMENT <span class="string">&#x27;关联的用户id&#x27;</span>,</span><br><span class="line">    `create_time` <span class="type">timestamp</span> <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="built_in">CURRENT_TIMESTAMP</span> COMMENT <span class="string">&#x27;创建时间&#x27;</span>,</span><br><span class="line">    <span class="keyword">PRIMARY KEY</span> (`id`) <span class="keyword">USING</span> BTREE,</span><br><span class="line">    <span class="keyword">UNIQUE</span> KEY `uk_follow_user_target` (`user_id`,`follow_user_id`),</span><br><span class="line">    KEY `idx_follow_user_time` (`user_id`,`create_time`,`id`),</span><br><span class="line">    KEY `idx_follow_target_time` (`follow_user_id`,`create_time`,`id`)</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>字段含义：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>关系记录主键</td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td>发起关注的用户，也就是关注者</td>
+</tr>
+<tr>
+<td><code>follow_user_id</code></td>
+<td>被关注的目标用户，也就是作者</td>
+</tr>
+<tr>
+<td><code>create_time</code></td>
+<td>建立关注关系的时间</td>
+</tr>
+</tbody></table>
+<p>例如用户 10 关注用户 20，数据库中保存：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">user_id = 10</span><br><span class="line">follow_user_id = 20</span><br></pre></td></tr></table></figure>
+
+<p>唯一索引 <code>uk_follow_user_target(user_id, follow_user_id)</code> 保证同一用户不能对同一目标保存两条关注关系。这是关注操作能够实现数据库幂等的基础。</p>
+<p>当前关注关系采用物理删除：取消关注时直接删除 <code>tb_follow</code> 中对应行。它与博客收藏关系表的 <code>state=0</code> 软删除设计不同。</p>
+<h3 id="3-2-查询索引的作用"><a href="#3-2-查询索引的作用" class="headerlink" title="3.2 查询索引的作用"></a>3.2 查询索引的作用</h3><p><code>idx_follow_user_time(user_id, create_time, id)</code> 适合查询“某个用户关注了谁”；<code>idx_follow_target_time(follow_user_id, create_time, id)</code> 适合查询“谁关注了某个用户”。</p>
+<p>共同关注查询和关注动态查询都会使用 <code>user_id</code>、<code>follow_user_id</code>，唯一索引也可以为部分查询提供前缀索引能力。</p>
+<h3 id="3-3-tb-user-info-中的统计字段"><a href="#3-3-tb-user-info-中的统计字段" class="headerlink" title="3.3 tb_user_info 中的统计字段"></a>3.3 <code>tb_user_info</code> 中的统计字段</h3><p>关注动作还会同步维护：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">followee  当前用户关注的人数</span><br><span class="line">fans      当前用户拥有的粉丝数</span><br></pre></td></tr></table></figure>
+
+<p>用户 10 关注用户 20 时：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">用户 10 的 followee + 1</span><br><span class="line">用户 20 的 fans + 1</span><br></pre></td></tr></table></figure>
+
+<p>取消关注时执行相反操作。</p>
+<h2 id="四、统一接口响应"><a href="#四、统一接口响应" class="headerlink" title="四、统一接口响应"></a>四、统一接口响应</h2><p>后端统一使用 <code>Result</code> 包装响应：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;success&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;errorMsg&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;total&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>关注和取消关注返回 <code>FollowActionResponse</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">FollowActionResponse</span><span class="params">(</span></span><br><span class="line"><span class="params">        <span class="type">long</span> targetUserId,</span></span><br><span class="line"><span class="params">        <span class="type">boolean</span> following,</span></span><br><span class="line"><span class="params">        <span class="type">boolean</span> changed)</span> &#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>字段含义：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>targetUserId</code></td>
+<td>本次操作的目标用户 ID</td>
+</tr>
+<tr>
+<td><code>following</code></td>
+<td>操作完成后的目标状态，<code>true</code> 表示关注，<code>false</code> 表示未关注</td>
+</tr>
+<tr>
+<td><code>changed</code></td>
+<td>数据库关系是否真的发生变化</td>
+</tr>
+</tbody></table>
+<p><code>changed</code> 和 <code>following</code> 不能混为一谈。例如重复关注时返回 <code>following=true</code>、<code>changed=false</code>，表示最终状态仍然是已关注，但这次没有插入新关系，也不能再次增加关注数和粉丝数。</p>
+<h2 id="五、关注接口"><a href="#五、关注接口" class="headerlink" title="五、关注接口"></a>五、关注接口</h2><h3 id="5-1-请求和响应"><a href="#5-1-请求和响应" class="headerlink" title="5.1 请求和响应"></a>5.1 请求和响应</h3><p>当前关注与取消关注共用一个接口，通过路径中的 <code>isFollow</code> 区分目标状态。</p>
+<p>关注用户 20：</p>
+<figure class="highlight http"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">PUT /follow/20/true</span><br><span class="line"><span class="attribute">Authorization</span><span class="punctuation">: </span>Bearer &#123;accessToken&#125;</span><br></pre></td></tr></table></figure>
+
+<p>该接口没有请求体。首次关注的响应示例：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;success&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;errorMsg&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;targetUserId&quot;</span><span class="punctuation">:</span> <span class="number">20</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;following&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;changed&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;total&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>重复关注的响应示例：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;success&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;errorMsg&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;targetUserId&quot;</span><span class="punctuation">:</span> <span class="number">20</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;following&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;changed&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">false</span></span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;total&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-完整调用链"><a href="#5-2-完整调用链" class="headerlink" title="5.2 完整调用链"></a>5.2 完整调用链</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">HTTP PUT /follow/&#123;id&#125;/true</span><br><span class="line">    -&gt; FollowController.follow</span><br><span class="line">        -&gt; 从 JWT subject 读取 userId</span><br><span class="line">        -&gt; IFollowService.follow(userId, targetUserId)</span><br><span class="line">            -&gt; FollowServiceImpl.requireExistingTarget</span><br><span class="line">                -&gt; 禁止无效 ID</span><br><span class="line">                -&gt; 禁止关注自己</span><br><span class="line">                -&gt; UserMapper.selectById 校验目标用户存在</span><br><span class="line">            -&gt; FollowMapper.insertIgnore</span><br><span class="line">                -&gt; INSERT IGNORE INTO tb_follow</span><br><span class="line">            -&gt; 只有 inserted == 1 时：</span><br><span class="line">                -&gt; UserInfoMapper.ensureRows</span><br><span class="line">                -&gt; UserInfoMapper.incrementFollowee</span><br><span class="line">                -&gt; UserInfoMapper.incrementFans</span><br><span class="line">                -&gt; afterCommitUpdateFollowState(..., true)</span><br><span class="line">            -&gt; new FollowActionResponse(targetUserId, true, inserted == 1)</span><br><span class="line">        -&gt; Result.ok(response)</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-3-FollowController-follow-的作用"><a href="#5-3-FollowController-follow-的作用" class="headerlink" title="5.3 FollowController.follow() 的作用"></a>5.3 <code>FollowController.follow()</code> 的作用</h3><p>Controller 只负责协议层工作：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">long</span> <span class="variable">userId</span> <span class="operator">=</span> Long.parseLong(jwt.getSubject());</span><br><span class="line"><span class="type">FollowActionResponse</span> <span class="variable">response</span> <span class="operator">=</span> Boolean.TRUE.equals(isFollow)</span><br><span class="line">        ? followService.follow(userId, id)</span><br><span class="line">        : followService.unfollow(userId, id);</span><br><span class="line"><span class="keyword">return</span> Result.ok(response);</span><br></pre></td></tr></table></figure>
+
+<p>它从 JWT 获取操作人，避免客户端伪造 <code>userId</code>；然后根据 <code>isFollow</code> 选择关注或取消关注方法。Controller 不直接写数据库，也不直接更新 Redis。</p>
+<h3 id="5-4-requireExistingTarget-的作用"><a href="#5-4-requireExistingTarget-的作用" class="headerlink" title="5.4 requireExistingTarget() 的作用"></a>5.4 <code>requireExistingTarget()</code> 的作用</h3><p>执行数据库写入前，Service 会检查：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (targetUserId &lt;= <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">IllegalArgumentException</span>(<span class="string">&quot;用户不存在&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">if</span> (userId == targetUserId) &#123;</span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">IllegalArgumentException</span>(<span class="string">&quot;不能关注自己&quot;</span>);</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">if</span> (userMapper.selectById(targetUserId) == <span class="literal">null</span>) &#123;</span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">IllegalArgumentException</span>(<span class="string">&quot;用户不存在&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这一步防止三类无效关系：目标 ID 非法、自己关注自己、关注不存在的用户。</p>
+<h3 id="5-5-insertIgnore-如何保证幂等"><a href="#5-5-insertIgnore-如何保证幂等" class="headerlink" title="5.5 insertIgnore() 如何保证幂等"></a>5.5 <code>insertIgnore()</code> 如何保证幂等</h3><p>Mapper 执行：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">INSERT</span> IGNORE <span class="keyword">INTO</span> tb_follow (user_id, follow_user_id)</span><br><span class="line"><span class="keyword">VALUES</span> (#&#123;userId&#125;, #&#123;followUserId&#125;)</span><br></pre></td></tr></table></figure>
+
+<p>第一次关注时插入成功，返回影响行数 1。重复关注触发唯一索引冲突，但 <code>INSERT IGNORE</code> 不抛出重复键异常，而是返回影响行数 0。</p>
+<p>Service 只有在 <code>inserted == 1</code> 时才增加统计：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (inserted == <span class="number">1</span>) &#123;</span><br><span class="line">    userInfoMapper.ensureRows(userId, targetUserId);</span><br><span class="line">    userInfoMapper.incrementFollowee(userId);</span><br><span class="line">    userInfoMapper.incrementFans(targetUserId);</span><br><span class="line">    afterCommitUpdateFollowState(userId, targetUserId, <span class="literal">true</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>因此用户连续点击多次关注，只会插入一次关系，也只会把关注数和粉丝数增加一次。</p>
+<h3 id="5-6-ensureRows-为什么在计数前调用"><a href="#5-6-ensureRows-为什么在计数前调用" class="headerlink" title="5.6 ensureRows() 为什么在计数前调用"></a>5.6 <code>ensureRows()</code> 为什么在计数前调用</h3><p>SQL 是：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">INSERT</span> IGNORE <span class="keyword">INTO</span> tb_user_info (user_id, fans, followee)</span><br><span class="line"><span class="keyword">VALUES</span> (#&#123;userId&#125;, <span class="number">0</span>, <span class="number">0</span>), (#&#123;targetUserId&#125;, <span class="number">0</span>, <span class="number">0</span>)</span><br></pre></td></tr></table></figure>
+
+<p>部分用户可能还没有 <code>tb_user_info</code> 行。如果直接执行 <code>UPDATE</code>，影响行数会是 0，统计无法增加。<code>ensureRows()</code> 先确保双方资料行存在，已经存在时由 <code>INSERT IGNORE</code> 安全跳过。</p>
+<h2 id="六、取消关注接口"><a href="#六、取消关注接口" class="headerlink" title="六、取消关注接口"></a>六、取消关注接口</h2><h3 id="6-1-请求和响应"><a href="#6-1-请求和响应" class="headerlink" title="6.1 请求和响应"></a>6.1 请求和响应</h3><p>取消关注用户 20：</p>
+<figure class="highlight http"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">PUT /follow/20/false</span><br><span class="line"><span class="attribute">Authorization</span><span class="punctuation">: </span>Bearer &#123;accessToken&#125;</span><br></pre></td></tr></table></figure>
+
+<p>成功响应：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;success&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;errorMsg&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;targetUserId&quot;</span><span class="punctuation">:</span> <span class="number">20</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;following&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">false</span></span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;changed&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;total&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>重复取消时 <code>following=false</code>、<code>changed=false</code>。</p>
+<h3 id="6-2-完整调用链"><a href="#6-2-完整调用链" class="headerlink" title="6.2 完整调用链"></a>6.2 完整调用链</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">HTTP PUT /follow/&#123;id&#125;/false</span><br><span class="line">    -&gt; FollowController.follow</span><br><span class="line">        -&gt; IFollowService.unfollow</span><br><span class="line">            -&gt; FollowServiceImpl.requireExistingTarget</span><br><span class="line">            -&gt; FollowMapper.deleteRelation</span><br><span class="line">                -&gt; DELETE FROM tb_follow</span><br><span class="line">            -&gt; 只有 deleted == 1 时：</span><br><span class="line">                -&gt; UserInfoMapper.decrementFollowee</span><br><span class="line">                -&gt; UserInfoMapper.decrementFans</span><br><span class="line">                -&gt; afterCommitUpdateFollowState(..., false)</span><br><span class="line">            -&gt; new FollowActionResponse(targetUserId, false, deleted == 1)</span><br><span class="line">        -&gt; Result.ok(response)</span><br></pre></td></tr></table></figure>
+
+<p>Mapper SQL：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">DELETE</span> <span class="keyword">FROM</span> tb_follow</span><br><span class="line"><span class="keyword">WHERE</span> user_id <span class="operator">=</span> #&#123;userId&#125; <span class="keyword">AND</span> follow_user_id <span class="operator">=</span> #&#123;followUserId&#125;</span><br></pre></td></tr></table></figure>
+
+<p>只有真实存在的关系会返回影响行数 1。关系不存在时返回 0，因此重复取消不会再次减少统计数字。</p>
+<p>计数减少 SQL 还增加了非负保护：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">UPDATE</span> tb_user_info <span class="keyword">SET</span> followee <span class="operator">=</span> followee <span class="operator">-</span> <span class="number">1</span></span><br><span class="line"><span class="keyword">WHERE</span> user_id <span class="operator">=</span> #&#123;userId&#125; <span class="keyword">AND</span> followee <span class="operator">&gt;</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">UPDATE</span> tb_user_info <span class="keyword">SET</span> fans <span class="operator">=</span> fans <span class="operator">-</span> <span class="number">1</span></span><br><span class="line"><span class="keyword">WHERE</span> user_id <span class="operator">=</span> #&#123;userId&#125; <span class="keyword">AND</span> fans <span class="operator">&gt;</span> <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+
+<p>这可以防止异常情况下把统计字段减成负数，但不能自动修复已经漂移的统计值。</p>
+<h2 id="七、事务如何保证关系和计数一致"><a href="#七、事务如何保证关系和计数一致" class="headerlink" title="七、事务如何保证关系和计数一致"></a>七、事务如何保证关系和计数一致</h2><p><code>follow()</code> 和 <code>unfollow()</code> 都使用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Transactional(rollbackFor = Exception.class)</span></span><br></pre></td></tr></table></figure>
+
+<p>一个关注事务内包含：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">写 tb_follow</span><br><span class="line">    + 更新当前用户 followee</span><br><span class="line">    + 更新目标用户 fans</span><br></pre></td></tr></table></figure>
+
+<p>其中任何一个数据库操作抛出异常，整个事务回滚，避免出现“关系已经建立但计数没有增加”或“关系已经删除但计数没有减少”。</p>
+<p>Redis 不参与 MySQL 本地事务。因此代码没有在数据库提交前立即更新缓存，而是调用 <code>afterCommitUpdateFollowState()</code> 注册事务提交回调。</p>
+<h2 id="八、为什么在事务提交后更新-Redis"><a href="#八、为什么在事务提交后更新-Redis" class="headerlink" title="八、为什么在事务提交后更新 Redis"></a>八、为什么在事务提交后更新 Redis</h2><h3 id="8-1-调用关系"><a href="#8-1-调用关系" class="headerlink" title="8.1 调用关系"></a>8.1 调用关系</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">FollowServiceImpl.follow / unfollow</span><br><span class="line">    -&gt; afterCommitUpdateFollowState</span><br><span class="line">        -&gt; TransactionSynchronizationManager.registerSynchronization</span><br><span class="line">            -&gt; 数据库事务成功提交</span><br><span class="line">            -&gt; TransactionSynchronization.afterCommit</span><br><span class="line">                -&gt; FollowStateService.setFollowState</span><br><span class="line">                    -&gt; Redis SET qy:state:follow:&#123;userId&#125;:&#123;targetUserId&#125;</span><br></pre></td></tr></table></figure>
+
+<p>核心逻辑：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (TransactionSynchronizationManager.isSynchronizationActive()) &#123;</span><br><span class="line">    TransactionSynchronizationManager.registerSynchronization(</span><br><span class="line">            <span class="keyword">new</span> <span class="title class_">TransactionSynchronization</span>() &#123;</span><br><span class="line">                <span class="meta">@Override</span></span><br><span class="line">                <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">afterCommit</span><span class="params">()</span> &#123;</span><br><span class="line">                    followStateService.setFollowState(</span><br><span class="line">                            userId, targetUserId, following);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    followStateService.setFollowState(userId, targetUserId, following);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如果在事务提交前写 Redis，之后 MySQL 回滚，就会出现 Redis 显示“已关注”，但数据库没有关注关系。提交后更新可以避免缓存先于最终事实发生变化。</p>
+<p>当方法不在事务同步环境中运行时，代码会直接更新 Redis，保证该工具方法仍可工作。</p>
+<h3 id="8-2-一致性模型"><a href="#8-2-一致性模型" class="headerlink" title="8.2 一致性模型"></a>8.2 一致性模型</h3><p>当前设计中：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">MySQL tb_follow = 最终事实</span><br><span class="line">Redis 关注状态 = 可过期的查询加速缓存</span><br><span class="line">tb_user_info fans/followee = 事务内维护的统计字段</span><br></pre></td></tr></table></figure>
+
+<p>Redis 写入失败不会改变已经提交的 MySQL 关系。旧缓存最多保留到 TTL 到期，之后重新从数据库加载。因此这里采用的是“MySQL 强事实 + Redis 最终一致缓存”。</p>
+<h2 id="九、关注状态缓存"><a href="#九、关注状态缓存" class="headerlink" title="九、关注状态缓存"></a>九、关注状态缓存</h2><h3 id="9-1-Redis-Key"><a href="#9-1-Redis-Key" class="headerlink" title="9.1 Redis Key"></a>9.1 Redis Key</h3><p><code>FollowStateService</code> 使用：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qy:state:follow:&#123;userId&#125;:&#123;targetUserId&#125;</span><br></pre></td></tr></table></figure>
+
+<p>例如用户 10 是否关注用户 20：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">qy:state:follow:10:20</span><br></pre></td></tr></table></figure>
+
+<p>缓存值：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">1 = 已关注</span><br><span class="line">0 = 未关注</span><br></pre></td></tr></table></figure>
+
+<p>未关注也缓存为 <code>0</code>，属于空结果缓存，可以防止每次判断未关注状态都访问数据库。</p>
+<p>TTL 为 10 分钟加 0～120 秒随机抖动，即大约 10～12 分钟。随机抖动可以减少大量关注状态 Key 在同一时刻集中过期。</p>
+<h3 id="9-2-单个状态查询接口"><a href="#9-2-单个状态查询接口" class="headerlink" title="9.2 单个状态查询接口"></a>9.2 单个状态查询接口</h3><p>请求：</p>
+<figure class="highlight http"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">GET /follow/or/not/20</span><br><span class="line"><span class="attribute">Authorization</span><span class="punctuation">: </span>Bearer &#123;accessToken&#125;</span><br></pre></td></tr></table></figure>
+
+<p>已关注响应：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;success&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;errorMsg&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;total&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p>完整调用链：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">FollowController.orNot</span><br><span class="line">    -&gt; 从 JWT 获取 userId</span><br><span class="line">    -&gt; FollowServiceImpl.isFollowed</span><br><span class="line">    -&gt; FollowStateService.isFollowed</span><br><span class="line">        -&gt; userId == targetUserId 时直接返回 false</span><br><span class="line">        -&gt; Redis GET qy:state:follow:&#123;userId&#125;:&#123;targetUserId&#125;</span><br><span class="line">        -&gt; 命中：把 &quot;1&quot; 转成 true，&quot;0&quot; 转成 false</span><br><span class="line">        -&gt; 未命中：FollowMapper.isFollowing</span><br><span class="line">            -&gt; SELECT EXISTS(...) FROM tb_follow</span><br><span class="line">        -&gt; Redis SET &quot;1&quot; 或 &quot;0&quot;，带随机 TTL</span><br><span class="line">        -&gt; 返回布尔值</span><br></pre></td></tr></table></figure>
+
+<h3 id="9-3-isFollowing-SQL"><a href="#9-3-isFollowing-SQL" class="headerlink" title="9.3 isFollowing() SQL"></a>9.3 <code>isFollowing()</code> SQL</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="keyword">EXISTS</span>(</span><br><span class="line">    <span class="keyword">SELECT</span> <span class="number">1</span> <span class="keyword">FROM</span> tb_follow</span><br><span class="line">    <span class="keyword">WHERE</span> user_id <span class="operator">=</span> #&#123;userId&#125;</span><br><span class="line">      <span class="keyword">AND</span> follow_user_id <span class="operator">=</span> #&#123;targetUserId&#125;</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p>这里使用 <code>EXISTS</code>，数据库找到第一条符合条件的关系即可返回，不需要读取完整关系实体。</p>
+<h3 id="9-4-批量查询关注状态"><a href="#9-4-批量查询关注状态" class="headerlink" title="9.4 批量查询关注状态"></a>9.4 批量查询关注状态</h3><p>Feed 页面一次会展示多个作者。如果逐个调用单查，会产生 N 次 Redis 请求或 N 次数据库查询。因此 <code>FollowStateService.getBatch()</code> 提供批量读取。</p>
+<p>调用链：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">BlogFeedServiceImpl.enrich</span><br><span class="line">    -&gt; readFollowed</span><br><span class="line">    -&gt; FollowStateService.getBatch(currentUserId, authorIds)</span><br><span class="line">        -&gt; 作者 ID 去重</span><br><span class="line">        -&gt; Redis Pipeline 批量 GET 多个状态 Key</span><br><span class="line">        -&gt; 收集缓存缺失的作者 ID</span><br><span class="line">        -&gt; FollowMapper.selectFollowedUserIds 一次查询缺失部分</span><br><span class="line">        -&gt; 将数据库结果转换成 Set</span><br><span class="line">        -&gt; 为每个缺失作者回填 Redis 的 &quot;1&quot; 或 &quot;0&quot;</span><br><span class="line">        -&gt; 返回 Map&lt;targetUserId, Boolean&gt;</span><br></pre></td></tr></table></figure>
+
+<p>公共 Feed、我的收藏 Feed 通过 <code>BlogFeedServiceImpl.enrich()</code> 调用它；关注动态和其他博客列表通过 <code>BlogController.overlayUserState()</code> 调用它。</p>
+<p>批量查询 SQL：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> follow_user_id</span><br><span class="line"><span class="keyword">FROM</span> tb_follow</span><br><span class="line"><span class="keyword">WHERE</span> user_id <span class="operator">=</span> #&#123;userId&#125;</span><br><span class="line">  <span class="keyword">AND</span> follow_user_id <span class="keyword">IN</span> (...)</span><br></pre></td></tr></table></figure>
+
+<p>数据库只返回实际关注的目标 ID。Service 使用一个 Set 判断缺失作者是否在结果中，不存在的关系按 <code>false</code> 回填缓存。</p>
+<h2 id="十、共同关注"><a href="#十、共同关注" class="headerlink" title="十、共同关注"></a>十、共同关注</h2><h3 id="10-1-接口"><a href="#10-1-接口" class="headerlink" title="10.1 接口"></a>10.1 接口</h3><p>查询当前用户与用户 20 的共同关注：</p>
+<figure class="highlight http"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">GET /follow/common/20</span><br><span class="line"><span class="attribute">Authorization</span><span class="punctuation">: </span>Bearer &#123;accessToken&#125;</span><br></pre></td></tr></table></figure>
+
+<p>响应示例：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;success&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;errorMsg&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">    <span class="punctuation">&#123;</span></span><br><span class="line">      <span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="number">35</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;nickName&quot;</span><span class="punctuation">:</span> <span class="string">&quot;小雀&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;icon&quot;</span><span class="punctuation">:</span> <span class="string">&quot;https://cdn.example.com/avatar-35.jpg&quot;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;total&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="10-2-调用链"><a href="#10-2-调用链" class="headerlink" title="10.2 调用链"></a>10.2 调用链</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">FollowController.common</span><br><span class="line">    -&gt; 从 JWT 获取当前 userId</span><br><span class="line">    -&gt; FollowServiceImpl.commonFollows</span><br><span class="line">        -&gt; UserMapper.selectById 校验目标用户存在</span><br><span class="line">        -&gt; FollowMapper.selectCommonFollows</span><br><span class="line">            -&gt; 两次连接 tb_follow</span><br><span class="line">            -&gt; 连接 tb_user 获取用户资料</span><br><span class="line">            -&gt; 按当前用户关注时间倒序</span><br><span class="line">            -&gt; 最多返回 20 条</span><br><span class="line">        -&gt; List&lt;UserDTO&gt;</span><br><span class="line">    -&gt; Result.ok</span><br></pre></td></tr></table></figure>
+
+<p>SQL 的逻辑是：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> u.id, u.nick_name <span class="keyword">AS</span> nickName, u.icon</span><br><span class="line"><span class="keyword">FROM</span> tb_follow f1</span><br><span class="line"><span class="keyword">JOIN</span> tb_follow f2</span><br><span class="line">  <span class="keyword">ON</span> f2.follow_user_id <span class="operator">=</span> f1.follow_user_id</span><br><span class="line"><span class="keyword">JOIN</span> tb_user u</span><br><span class="line">  <span class="keyword">ON</span> u.id <span class="operator">=</span> f1.follow_user_id</span><br><span class="line"><span class="keyword">WHERE</span> f1.user_id <span class="operator">=</span> #&#123;userId&#125;</span><br><span class="line">  <span class="keyword">AND</span> f2.user_id <span class="operator">=</span> #&#123;targetUserId&#125;</span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> f1.create_time <span class="keyword">DESC</span></span><br><span class="line">LIMIT <span class="number">20</span></span><br></pre></td></tr></table></figure>
+
+<p><code>f1</code> 表示当前用户关注的关系，<code>f2</code> 表示目标用户关注的关系。两个关系的 <code>follow_user_id</code> 相同，就说明两个人都关注了这个用户。</p>
+<p>该查询直接访问 MySQL，没有 Redis 缓存。由于固定最多返回 20 条，当前实现更偏向简单直接。</p>
+<h2 id="十一、关注动态-Feed"><a href="#十一、关注动态-Feed" class="headerlink" title="十一、关注动态 Feed"></a>十一、关注动态 Feed</h2><p>关注动态不是 <code>FollowController</code> 提供，而是博客模块使用关注关系生成。</p>
+<h3 id="11-1-接口"><a href="#11-1-接口" class="headerlink" title="11.1 接口"></a>11.1 接口</h3><p>第一页请求示例：</p>
+<figure class="highlight http"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">GET /blog/of/follow?lastId=1789189200000&amp;offset=0</span><br><span class="line"><span class="attribute">Authorization</span><span class="punctuation">: </span>Bearer &#123;accessToken&#125;</span><br></pre></td></tr></table></figure>
+
+<p>参数含义：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>lastId</code></td>
+<td>上一页最小发布时间的毫秒时间戳；首次请求通常传当前时间之后的值</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>上一页末尾与最小时间相同的记录数量，用于处理相同时间戳</td>
+</tr>
+</tbody></table>
+<p>响应示例：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;success&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;errorMsg&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;data&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;list&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">      <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;id&quot;</span><span class="punctuation">:</span> <span class="number">123</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;userId&quot;</span><span class="punctuation">:</span> <span class="number">20</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;title&quot;</span><span class="punctuation">:</span> <span class="string">&quot;今天的新笔记&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;description&quot;</span><span class="punctuation">:</span> <span class="string">&quot;正文摘要&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;images&quot;</span><span class="punctuation">:</span> <span class="string">&quot;https://cdn.example.com/blog.jpg&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;coverUrl&quot;</span><span class="punctuation">:</span> <span class="string">&quot;https://cdn.example.com/cover.jpg&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;liked&quot;</span><span class="punctuation">:</span> <span class="number">42</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;favorites&quot;</span><span class="punctuation">:</span> <span class="number">8</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;comments&quot;</span><span class="punctuation">:</span> <span class="number">3</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;status&quot;</span><span class="punctuation">:</span> <span class="number">1</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;publishTime&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2026-09-12T10:00:00&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;作者昵称&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;icon&quot;</span><span class="punctuation">:</span> <span class="string">&quot;https://cdn.example.com/avatar.jpg&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;isLike&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">false</span></span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;faved&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;followed&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span></span><br><span class="line">      <span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;minTime&quot;</span><span class="punctuation">:</span> <span class="number">1789188000000</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;offset&quot;</span><span class="punctuation">:</span> <span class="number">1</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;total&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">null</span></span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="11-2-完整调用链"><a href="#11-2-完整调用链" class="headerlink" title="11.2 完整调用链"></a>11.2 完整调用链</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">BlogController.queryBlogOfFollow</span><br><span class="line">    -&gt; 从 JWT 获取 userId</span><br><span class="line">    -&gt; BlogServiceImpl.queryFeedOfFollow(userId, lastId, offset)</span><br><span class="line">        -&gt; 把 lastId 毫秒时间戳转换成 LocalDateTime</span><br><span class="line">        -&gt; BlogMapper.selectFeedOfFollow</span><br><span class="line">            -&gt; 子查询 tb_follow 得到关注用户 ID</span><br><span class="line">            -&gt; 查询这些用户 status=1 的博客</span><br><span class="line">            -&gt; 按 publish_time DESC, id DESC</span><br><span class="line">            -&gt; LIMIT offset, pageSize</span><br><span class="line">        -&gt; 读取最后一条博客的 publishTime</span><br><span class="line">        -&gt; 计算 minTime</span><br><span class="line">        -&gt; 统计页尾相同 publishTime 的记录数作为新 offset</span><br><span class="line">        -&gt; 组装 ScrollResult</span><br><span class="line">    -&gt; BlogController.toBlogList</span><br><span class="line">    -&gt; overlayAuthorInfo</span><br><span class="line">        -&gt; userService.listByIds 批量补作者昵称和头像</span><br><span class="line">    -&gt; overlayCounts</span><br><span class="line">        -&gt; CounterService.getCountsBatch 补实时点赞数和收藏数</span><br><span class="line">    -&gt; overlayUserState</span><br><span class="line">        -&gt; BitmapStateReader.getFlagsBatch 补 isLike、faved</span><br><span class="line">        -&gt; FollowStateService.getBatch 补 followed</span><br><span class="line">    -&gt; Result.ok(scroll)</span><br></pre></td></tr></table></figure>
+
+<h3 id="11-3-selectFeedOfFollow-的作用"><a href="#11-3-selectFeedOfFollow-的作用" class="headerlink" title="11.3 selectFeedOfFollow() 的作用"></a>11.3 <code>selectFeedOfFollow()</code> 的作用</h3><figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> b.<span class="operator">*</span></span><br><span class="line"><span class="keyword">FROM</span> tb_blog b</span><br><span class="line"><span class="keyword">WHERE</span> b.status <span class="operator">=</span> <span class="number">1</span></span><br><span class="line">  <span class="keyword">AND</span> b.user_id <span class="keyword">IN</span> (</span><br><span class="line">      <span class="keyword">SELECT</span> f.follow_user_id</span><br><span class="line">      <span class="keyword">FROM</span> tb_follow f</span><br><span class="line">      <span class="keyword">WHERE</span> f.user_id <span class="operator">=</span> #&#123;userId&#125;</span><br><span class="line">  )</span><br><span class="line">  <span class="keyword">AND</span> b.publish_time <span class="operator">&lt;</span> #&#123;maxTime&#125;</span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> b.publish_time <span class="keyword">DESC</span>, b.id <span class="keyword">DESC</span></span><br><span class="line">LIMIT #&#123;<span class="keyword">offset</span>&#125;, #&#123;size&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这条 SQL 的作用是：先从 <code>tb_follow</code> 找到当前用户关注的作者，再查询这些作者已经发布的博客。它每次直接读取 MySQL，没有使用公共 Feed 的三级页面缓存。</p>
+<h3 id="11-4-minTime-和-offset-的设计目的"><a href="#11-4-minTime-和-offset-的设计目的" class="headerlink" title="11.4 minTime 和 offset 的设计目的"></a>11.4 <code>minTime</code> 和 <code>offset</code> 的设计目的</h3><p>假设一页最后三条博客的发布时间相同，下一页如果只传 <code>minTime</code>，有可能重复读取或跳过相同时间的数据。因此滚动分页通常同时携带：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">minTime = 当前页最小发布时间</span><br><span class="line">offset = 当前结果中时间等于 minTime 的连续记录数</span><br></pre></td></tr></table></figure>
+
+<p>Service 从页尾向前统计相同发布时间：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="variable">sameCount</span> <span class="operator">=</span> <span class="number">1</span>;</span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> records.size() - <span class="number">2</span>; i &gt;= <span class="number">0</span>; i--) &#123;</span><br><span class="line">    <span class="type">Blog</span> <span class="variable">b</span> <span class="operator">=</span> records.get(i);</span><br><span class="line">    <span class="keyword">if</span> (b.getPublishTime() != <span class="literal">null</span></span><br><span class="line">            &amp;&amp; b.getPublishTime().equals(last.getPublishTime())) &#123;</span><br><span class="line">        sameCount++;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后把 <code>sameCount</code> 放入 <code>ScrollResult.offset</code>，供下一页请求使用。</p>
+<h2 id="十二、关注状态如何进入博客响应"><a href="#十二、关注状态如何进入博客响应" class="headerlink" title="十二、关注状态如何进入博客响应"></a>十二、关注状态如何进入博客响应</h2><p>关注模块不仅被关注接口调用，也会被博客详情和 Feed 调用。</p>
+<h3 id="12-1-博客详情"><a href="#12-1-博客详情" class="headerlink" title="12.1 博客详情"></a>12.1 博客详情</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">BlogController.queryBlogById</span><br><span class="line">    -&gt; FollowStateService.isFollowed(currentUserId, blog.userId)</span><br><span class="line">    -&gt; blog.setFollowed(...)</span><br></pre></td></tr></table></figure>
+
+<p>因此登录用户查看其他作者的博客详情时，可以直接得到 <code>followed</code> 字段并决定按钮状态。</p>
+<h3 id="12-2-公共-Feed-和我的收藏"><a href="#12-2-公共-Feed-和我的收藏" class="headerlink" title="12.2 公共 Feed 和我的收藏"></a>12.2 公共 Feed 和我的收藏</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">BlogFeedServiceImpl.getPublicFeed / Myfavs</span><br><span class="line">    -&gt; enrich</span><br><span class="line">    -&gt; readFollowed</span><br><span class="line">    -&gt; FollowStateService.getBatch</span><br></pre></td></tr></table></figure>
+
+<p>共享 Feed 缓存不保存某个用户专属的 <code>followed</code>。每次返回前才根据当前登录用户批量补充，避免用户 A 的关注状态被用户 B 看到。</p>
+<h3 id="12-3-关注动态"><a href="#12-3-关注动态" class="headerlink" title="12.3 关注动态"></a>12.3 关注动态</h3><figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">BlogController.queryBlogOfFollow</span><br><span class="line">    -&gt; overlayUserState</span><br><span class="line">    -&gt; FollowStateService.getBatch</span><br></pre></td></tr></table></figure>
+
+<p>关注动态中的作者理论上都是当前用户已经关注的人，因此 <code>followed</code> 通常为 <code>true</code>。仍然批量读取状态，可以保持不同博客列表响应结构一致。</p>
+<h2 id="十三、各方法的调用者和职责"><a href="#十三、各方法的调用者和职责" class="headerlink" title="十三、各方法的调用者和职责"></a>十三、各方法的调用者和职责</h2><table>
+<thead>
+<tr>
+<th>方法</th>
+<th>主要调用者</th>
+<th>职责</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>FollowController.follow</code></td>
+<td>HTTP 客户端</td>
+<td>根据路径中的布尔值分派关注或取消关注。</td>
+</tr>
+<tr>
+<td><code>FollowServiceImpl.follow</code></td>
+<td><code>FollowController</code></td>
+<td>在事务中新增关系并增加双方统计。</td>
+</tr>
+<tr>
+<td><code>FollowServiceImpl.unfollow</code></td>
+<td><code>FollowController</code></td>
+<td>在事务中删除关系并减少双方统计。</td>
+</tr>
+<tr>
+<td><code>requireExistingTarget</code></td>
+<td><code>follow</code>、<code>unfollow</code></td>
+<td>校验目标 ID、禁止关注自己、确认目标用户存在。</td>
+</tr>
+<tr>
+<td><code>FollowMapper.insertIgnore</code></td>
+<td><code>follow</code></td>
+<td>依靠唯一索引幂等插入关注关系。</td>
+</tr>
+<tr>
+<td><code>FollowMapper.deleteRelation</code></td>
+<td><code>unfollow</code></td>
+<td>删除指定的关注关系并返回真实影响行数。</td>
+</tr>
+<tr>
+<td><code>UserInfoMapper.ensureRows</code></td>
+<td><code>follow</code></td>
+<td>确保双方都有用户统计行。</td>
+</tr>
+<tr>
+<td><code>incrementFollowee/incrementFans</code></td>
+<td><code>follow</code></td>
+<td>增加关注者的关注数和目标用户的粉丝数。</td>
+</tr>
+<tr>
+<td><code>decrementFollowee/decrementFans</code></td>
+<td><code>unfollow</code></td>
+<td>减少对应统计，并防止数字小于零。</td>
+</tr>
+<tr>
+<td><code>afterCommitUpdateFollowState</code></td>
+<td><code>follow</code>、<code>unfollow</code></td>
+<td>在 MySQL 提交成功后更新 Redis 状态。</td>
+</tr>
+<tr>
+<td><code>FollowStateService.isFollowed</code></td>
+<td>状态接口、博客详情</td>
+<td>缓存优先地读取单个关注状态。</td>
+</tr>
+<tr>
+<td><code>FollowStateService.getBatch</code></td>
+<td>各类博客列表</td>
+<td>使用 Pipeline 和批量 SQL 读取多个作者的关注状态。</td>
+</tr>
+<tr>
+<td><code>FollowStateService.setFollowState</code></td>
+<td>事务提交回调</td>
+<td>把最终关注状态写入 Redis 并设置随机 TTL。</td>
+</tr>
+<tr>
+<td><code>FollowMapper.selectCommonFollows</code></td>
+<td><code>commonFollows</code></td>
+<td>通过两份关注关系连接计算共同关注。</td>
+</tr>
+<tr>
+<td><code>BlogServiceImpl.queryFeedOfFollow</code></td>
+<td><code>BlogController</code></td>
+<td>查询关注作者博客并计算滚动分页参数。</td>
+</tr>
+<tr>
+<td><code>BlogMapper.selectFeedOfFollow</code></td>
+<td><code>queryFeedOfFollow</code></td>
+<td>使用 <code>tb_follow</code> 过滤作者并查询已发布博客。</td>
+</tr>
+</tbody></table>
+<h2 id="十四、并发和幂等行为"><a href="#十四、并发和幂等行为" class="headerlink" title="十四、并发和幂等行为"></a>十四、并发和幂等行为</h2><h3 id="14-1-多次并发关注"><a href="#14-1-多次并发关注" class="headerlink" title="14.1 多次并发关注"></a>14.1 多次并发关注</h3><p>数据库唯一索引决定最多只有一个插入成功：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">请求 A -&gt; INSERT IGNORE -&gt; affectedRows=1 -&gt; 增加统计</span><br><span class="line">请求 B -&gt; INSERT IGNORE -&gt; affectedRows=0 -&gt; 不增加统计</span><br></pre></td></tr></table></figure>
+
+<p>因此同一用户快速点击关注不会造成多条关系或重复增加粉丝数。</p>
+<h3 id="14-2-多次并发取消"><a href="#14-2-多次并发取消" class="headerlink" title="14.2 多次并发取消"></a>14.2 多次并发取消</h3><p>只有第一个成功删除关系的请求返回 <code>deleted=1</code>，后续请求返回 0，因此只有一次统计减少。</p>
+<h3 id="14-3-关注和取消同时发生"><a href="#14-3-关注和取消同时发生" class="headerlink" title="14.3 关注和取消同时发生"></a>14.3 关注和取消同时发生</h3><p>关注与取消是两个独立事务。最终结果由数据库实际执行顺序决定，每次统计变化又以关系语句的影响行数为依据。对于单用户界面，前端仍应在请求处理中暂时禁用按钮，避免响应乱序把较旧状态覆盖到界面上。</p>
+<h2 id="十五、当前实现的边界和注意事项"><a href="#十五、当前实现的边界和注意事项" class="headerlink" title="十五、当前实现的边界和注意事项"></a>十五、当前实现的边界和注意事项</h2><h3 id="15-1-关注动态的同时间戳分页存在跳过风险"><a href="#15-1-关注动态的同时间戳分页存在跳过风险" class="headerlink" title="15.1 关注动态的同时间戳分页存在跳过风险"></a>15.1 关注动态的同时间戳分页存在跳过风险</h3><p>当前 Service 计算了相同时间的 <code>offset</code>，但 SQL 条件使用：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">b.publish_time <span class="operator">&lt;</span> #&#123;maxTime&#125;</span><br></pre></td></tr></table></figure>
+
+<p>严格小于已经排除了所有等于上一页 <code>minTime</code> 的博客，随后再使用 <code>LIMIT offset, size</code>，可能继续跳过下一批更早的数据。也就是说，当前 <code>offset</code> 的设计和 SQL 条件没有完全配套。</p>
+<p>常见修正方向有两种：</p>
+<ol>
+<li>保留同时间偏移语义，把时间条件调整为包含 <code>maxTime</code>，再用 <code>offset</code> 跳过已经读取的同时间记录；</li>
+<li>改为 <code>(publish_time, id)</code> 组合游标，下一页使用严格的小于条件，不再使用 offset。</li>
+</ol>
+<p>组合游标在数据量较大时更稳定，但需要接口额外返回末条博客 ID。</p>
+<h3 id="15-2-关注动态没有写扩散"><a href="#15-2-关注动态没有写扩散" class="headerlink" title="15.2 关注动态没有写扩散"></a>15.2 关注动态没有写扩散</h3><p>当前查询是读扩散：每次请求根据 <code>tb_follow</code> 找作者，再从 <code>tb_blog</code> 查询内容。它实现简单且关系变化立即生效，但关注人数和博客数据量很大时，SQL 压力会增加。</p>
+<p>当前代码没有在发布博客时把博客 ID 推送到每个粉丝的 Redis 收件箱，也没有 Kafka Feed 事件。</p>
+<h3 id="15-3-关注关系采用物理删除"><a href="#15-3-关注关系采用物理删除" class="headerlink" title="15.3 关注关系采用物理删除"></a>15.3 关注关系采用物理删除</h3><p>取消关注后关系行被删除，因此数据库不能直接保留历史关注、取消时间和操作次数。如果后续需要风控、推荐训练或关系历史审计，可以增加状态字段和更新时间，改成软删除；如果只关心当前关系，物理删除更简单。</p>
+<h3 id="15-4-Redis-是缓存，不是关系事实"><a href="#15-4-Redis-是缓存，不是关系事实" class="headerlink" title="15.4 Redis 是缓存，不是关系事实"></a>15.4 Redis 是缓存，不是关系事实</h3><p><code>qy:state:follow:*</code> 带 TTL，不能用于恢复完整关注关系。MySQL <code>tb_follow</code> 才是最终事实。Redis 丢失后，状态可以通过 Mapper 查询重新回填。</p>
+<h3 id="15-5-缓存更新失败的短暂不一致"><a href="#15-5-缓存更新失败的短暂不一致" class="headerlink" title="15.5 缓存更新失败的短暂不一致"></a>15.5 缓存更新失败的短暂不一致</h3><p>数据库提交后才写 Redis。如果提交后 Redis 不可用，数据库关系已经正确，但旧缓存可能暂时存在，直到 TTL 到期。若要进一步缩短不一致窗口，可以在失败时删除缓存、记录重试事件，或通过 Outbox&#x2F;Kafka 异步修复。</p>
+<h3 id="15-6-orNot-对不存在目标的行为"><a href="#15-6-orNot-对不存在目标的行为" class="headerlink" title="15.6 orNot 对不存在目标的行为"></a>15.6 <code>orNot</code> 对不存在目标的行为</h3><p>关注和取消关注会调用 <code>requireExistingTarget()</code> 校验用户存在；单独查询 <code>/follow/or/not/{id}</code> 不做目标用户存在校验，不存在的目标通常返回 <code>false</code>。调用方不能把 <code>false</code> 理解为目标用户一定存在。</p>
+<h3 id="15-7-关注统计是派生数据"><a href="#15-7-关注统计是派生数据" class="headerlink" title="15.7 关注统计是派生数据"></a>15.7 关注统计是派生数据</h3><p><code>fans</code> 和 <code>followee</code> 是为快速展示维护的统计字段，真实关系仍是 <code>tb_follow</code>。如果历史异常或手工修改数据库造成统计漂移，可以通过聚合 <code>tb_follow</code> 重新计算并校正。</p>
+<h3 id="15-8-数据库没有声明外键"><a href="#15-8-数据库没有声明外键" class="headerlink" title="15.8 数据库没有声明外键"></a>15.8 数据库没有声明外键</h3><p>当前 <code>tb_follow</code> 建表语句没有用户外键。业务层会在新增或取消前校验目标用户，但数据库本身不阻止绕过 Service 的直接写入，也不会在用户被删除时自动清理关系。</p>
+<h2 id="十六、推荐验证顺序"><a href="#十六、推荐验证顺序" class="headerlink" title="十六、推荐验证顺序"></a>十六、推荐验证顺序</h2><table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>操作</th>
+<th>预期结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>用户 10 关注用户 20</td>
+<td><code>tb_follow</code> 新增一行，10 的 <code>followee+1</code>，20 的 <code>fans+1</code>。</td>
+</tr>
+<tr>
+<td>2</td>
+<td>重复关注用户 20</td>
+<td><code>changed=false</code>，关系和统计都不重复增加。</td>
+</tr>
+<tr>
+<td>3</td>
+<td>查询 <code>/follow/or/not/20</code></td>
+<td>返回 <code>true</code>，Redis 中存在 <code>qy:state:follow:10:20=1</code>。</td>
+</tr>
+<tr>
+<td>4</td>
+<td>用户 10 取消关注 20</td>
+<td>关系被删除，双方统计各减少一次，缓存值变成 <code>0</code>。</td>
+</tr>
+<tr>
+<td>5</td>
+<td>重复取消</td>
+<td><code>changed=false</code>，统计不再减少。</td>
+</tr>
+<tr>
+<td>6</td>
+<td>关注自己</td>
+<td>返回“不能关注自己”。</td>
+</tr>
+<tr>
+<td>7</td>
+<td>关注不存在用户</td>
+<td>返回“用户不存在”。</td>
+</tr>
+<tr>
+<td>8</td>
+<td>两个用户关注同一作者</td>
+<td><code>/follow/common/{id}</code> 返回该共同关注用户。</td>
+</tr>
+<tr>
+<td>9</td>
+<td>关注多个作者并请求关注动态</td>
+<td>只返回这些作者 <code>status=1</code> 的博客。</td>
+</tr>
+<tr>
+<td>10</td>
+<td>检查动态响应</td>
+<td>作者资料、实时计数、点赞收藏状态和 <code>followed</code> 均已补齐。</td>
+</tr>
+<tr>
+<td>11</td>
+<td>构造相同 <code>publish_time</code> 的多篇博客跨页</td>
+<td>验证当前 SQL 是否发生跳过，并据此修正游标策略。</td>
+</tr>
+</tbody></table>
+<h2 id="十七、总结"><a href="#十七、总结" class="headerlink" title="十七、总结"></a>十七、总结</h2><p>雀跃当前关注模块的核心设计可以概括为：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">tb_follow 保存真实关系</span><br><span class="line">    + MySQL 事务同步维护 fans/followee</span><br><span class="line">    + 唯一索引和影响行数保证写操作幂等</span><br><span class="line">    + Redis 缓存单个和批量关注状态</span><br><span class="line">    + 事务提交后更新缓存</span><br><span class="line">    + 博客模块根据关系表查询关注动态</span><br></pre></td></tr></table></figure>
+
+<p>这套实现已经覆盖关注、取消关注、状态查询、共同关注和关注动态。最需要继续处理的是关注动态滚动分页中 <code>publish_time &lt; maxTime</code> 与 <code>offset</code> 同时使用造成的分页语义冲突；在进入更大数据量前，建议统一成包含同时间偏移或 <code>(publish_time, id)</code> 组合游标中的一种。</p>
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E9%9B%80%E8%B7%83/">雀跃</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃Feed三级缓存、反向索引与我的收藏前后端联调"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">雀跃Feed三级缓存、反向索引与我的收藏前后端联调</div></div><div class="info-2"><div class="info-item-1">雀跃 Feed 三级缓存、反向索引与我的收藏前后端联调本文只描述前端如何使用功能、接口的请求和响应，以及后端方法之间的调用关系。 后端项目目录： 1D:\queping\queyue_be-main  默认服务地址： 1http://localhost:8081  除公共 Feed 允许匿名访问外，其他接口都需要携带登录后的 JWT： 12Authorization: Bearer &#123;accessToken&#125;Content-Type: application/json  一、前端功能和存在的意义1. 公共 Feed前端展示已经发布的博客，排序规则是发布时间倒序，同一发布时间再按博客 ID 倒序。它的意义是让用户优先看到新发布内容，而不是把首页结果固定成热门排序。 前端只负责：  展示博客标题、摘要、图片、作者、发布时间和计数； 到达页面底部时请求下一页； 使用博客 ID 作为列表唯一标识，避免同一博客重复渲染； 接收后端返回的实时点赞数、收藏数和当前用户状态。  三级缓存、小时槽和反向索引都在后端完成，前端不需要拼接 Redis Key，也不能直接操作缓存。 ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/08/17/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83JWT%E5%8F%8C%E4%BB%A4%E7%89%8C%E7%99%BB%E5%BD%95%E6%94%B9%E9%80%A0/" title="雀跃JWT双令牌登录改造"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-17</div><div class="info-item-2">雀跃JWT双令牌登录改造</div></div><div class="info-2"><div class="info-item-1">雀跃登录模块改造教程：JWT 双令牌 + Redis 白名单 + Spring Security1. V2.0登录设计 用户仍通过雀跃原来的 /user/code 获取手机验证码。 用户向 /auth/login 提交手机号和验证码。 后端返回一对 RSA 签名的 JWT： accessToken：15 分钟有效，只用于访问业务接口； refreshToken：7 天有效，只用于换取一对新令牌。   refresh token 的 jti 会存入 Redis 白名单：auth:refresh:{userId}:{jti}。 访问业务接口时发送 Authorization: Bearer &lt;accessToken&gt;。 Spring Security 自动校验 access token，并把解析后的 JWT 放入安全上下文。 Controller 可以通过 @AuthenticationPrincipal Jwt jwt 获取 JWT，再通过 jwt.getSubject() 取得 userId。 access token 过期后，客户端调用 /auth/token/re...</div></div></div></a><a class="pagination-related" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃Feed三级缓存、反向索引与我的收藏后端代码设计与讲解"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-12</div><div class="info-item-2">雀跃Feed三级缓存、反向索引与我的收藏后端代码设计与讲解</div></div><div class="info-2"><div class="info-item-1">本文是雀跃三级缓存的设计 雀跃 Feed 三级缓存、反向索引与我的收藏后端代码设计与讲解一、改造目标本次改造包含三部分：  公共 Feed 从原来的热门排序改为按 publish_time DESC, id DESC 展示最新发布内容。 使用 Caffeine + Redis 页面 ID 列表 + Redis 博客片段组成三级缓存，并用博客到页面的反向索引进行定向失效。 使用 tb_blog_favorite 关系表保存收藏事实，新增“我的收藏”分页接口。  整体数据流如下： 1234567891011121314151617公共 Feed 读请求    -&gt; Caffeine 本地页面缓存    -&gt; Redis 页面 ID List + Redis 博客片段    -&gt; MySQL selectHotFeed    -&gt; 回填 Redis 和 Caffeine博客内容更新    -&gt; Redis 反向索引找到包含该 blog 的页面    -&gt; 失效 Caffeine 页面    -&gt; 反向索引移除页面引用    -&gt; Redi...</div></div></div></a><a class="pagination-related" href="/2026/08/24/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E8%AE%A1%E6%95%B0%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃计数，关系模块2"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-08-24</div><div class="info-item-2">雀跃计数，关系模块2</div></div><div class="info-2"><div class="info-item-1">雀跃计数模块后端代码设计与讲解 一、设计亮点使用BitMap在Redis中记录用户行为（是否点赞，收藏），SDS快照(二进制GET + 聚合桶) dirty 脏版本 + CounterCheckpointJob：每 30 秒把逻辑计数写回 tb_blog.liked/favorites（热榜排序用），批次完成后失效一次热榜缓存 L1&#x2F;L2； BitmapStateReader：整页 pipeline GETBIT 批量用户态 counter_read.lua：原子读取“SDS + 聚合桶”的逻辑计数 关注&#x2F;粉丝计数由MySQL事务维护 counter_read.lua 逻辑同时读（SDS + 桶，立即正确）二、大概的流程123456789101112131415161718192021222324写路径  POST /api/v1/action/like|unlike|fav|unfav（body: entityType/entityId）  PUT/DELETE /blog/&#123;blogId&#125;/like|favorite（雀跃前端在用的博客...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">specialweek4</div><div class="author-info-description">specialweek4的博客,记录我的学习和生活点滴</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">68</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">22</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">15</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/specialweek4"><i class="fab fa-github"></i><span>关注我</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/specialweek4" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:504957307@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">❀Specialweek Blog❀ 记录我的学习和生活，分享我喜欢的东西。🎸🎶❀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E9%9B%80%E8%B7%83%E5%85%B3%E6%B3%A8%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3"><span class="toc-number">1.</span> <span class="toc-text">雀跃关注模块后端代码设计与讲解</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E5%85%B3%E6%B3%A8%E6%A8%A1%E5%9D%97%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98"><span class="toc-number">1.1.</span> <span class="toc-text">一、关注模块解决什么问题</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E6%B6%89%E5%8F%8A%E7%9A%84%E4%B8%BB%E8%A6%81%E4%BB%A3%E7%A0%81"><span class="toc-number">1.2.</span> <span class="toc-text">二、涉及的主要代码</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%95%B0%E6%8D%AE%E5%BA%93%E8%A1%A8%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.3.</span> <span class="toc-text">三、数据库表设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-tb-follow-%E5%85%B3%E6%B3%A8%E5%85%B3%E7%B3%BB%E8%A1%A8"><span class="toc-number">1.3.1.</span> <span class="toc-text">3.1 tb_follow 关注关系表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E6%9F%A5%E8%AF%A2%E7%B4%A2%E5%BC%95%E7%9A%84%E4%BD%9C%E7%94%A8"><span class="toc-number">1.3.2.</span> <span class="toc-text">3.2 查询索引的作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-tb-user-info-%E4%B8%AD%E7%9A%84%E7%BB%9F%E8%AE%A1%E5%AD%97%E6%AE%B5"><span class="toc-number">1.3.3.</span> <span class="toc-text">3.3 tb_user_info 中的统计字段</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E7%BB%9F%E4%B8%80%E6%8E%A5%E5%8F%A3%E5%93%8D%E5%BA%94"><span class="toc-number">1.4.</span> <span class="toc-text">四、统一接口响应</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%85%B3%E6%B3%A8%E6%8E%A5%E5%8F%A3"><span class="toc-number">1.5.</span> <span class="toc-text">五、关注接口</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E8%AF%B7%E6%B1%82%E5%92%8C%E5%93%8D%E5%BA%94"><span class="toc-number">1.5.1.</span> <span class="toc-text">5.1 请求和响应</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E5%AE%8C%E6%95%B4%E8%B0%83%E7%94%A8%E9%93%BE"><span class="toc-number">1.5.2.</span> <span class="toc-text">5.2 完整调用链</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-FollowController-follow-%E7%9A%84%E4%BD%9C%E7%94%A8"><span class="toc-number">1.5.3.</span> <span class="toc-text">5.3 FollowController.follow() 的作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-4-requireExistingTarget-%E7%9A%84%E4%BD%9C%E7%94%A8"><span class="toc-number">1.5.4.</span> <span class="toc-text">5.4 requireExistingTarget() 的作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-5-insertIgnore-%E5%A6%82%E4%BD%95%E4%BF%9D%E8%AF%81%E5%B9%82%E7%AD%89"><span class="toc-number">1.5.5.</span> <span class="toc-text">5.5 insertIgnore() 如何保证幂等</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-6-ensureRows-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%9C%A8%E8%AE%A1%E6%95%B0%E5%89%8D%E8%B0%83%E7%94%A8"><span class="toc-number">1.5.6.</span> <span class="toc-text">5.6 ensureRows() 为什么在计数前调用</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E5%8F%96%E6%B6%88%E5%85%B3%E6%B3%A8%E6%8E%A5%E5%8F%A3"><span class="toc-number">1.6.</span> <span class="toc-text">六、取消关注接口</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-%E8%AF%B7%E6%B1%82%E5%92%8C%E5%93%8D%E5%BA%94"><span class="toc-number">1.6.1.</span> <span class="toc-text">6.1 请求和响应</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-%E5%AE%8C%E6%95%B4%E8%B0%83%E7%94%A8%E9%93%BE"><span class="toc-number">1.6.2.</span> <span class="toc-text">6.2 完整调用链</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E4%BA%8B%E5%8A%A1%E5%A6%82%E4%BD%95%E4%BF%9D%E8%AF%81%E5%85%B3%E7%B3%BB%E5%92%8C%E8%AE%A1%E6%95%B0%E4%B8%80%E8%87%B4"><span class="toc-number">1.7.</span> <span class="toc-text">七、事务如何保证关系和计数一致</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E5%9C%A8%E4%BA%8B%E5%8A%A1%E6%8F%90%E4%BA%A4%E5%90%8E%E6%9B%B4%E6%96%B0-Redis"><span class="toc-number">1.8.</span> <span class="toc-text">八、为什么在事务提交后更新 Redis</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#8-1-%E8%B0%83%E7%94%A8%E5%85%B3%E7%B3%BB"><span class="toc-number">1.8.1.</span> <span class="toc-text">8.1 调用关系</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#8-2-%E4%B8%80%E8%87%B4%E6%80%A7%E6%A8%A1%E5%9E%8B"><span class="toc-number">1.8.2.</span> <span class="toc-text">8.2 一致性模型</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%9D%E3%80%81%E5%85%B3%E6%B3%A8%E7%8A%B6%E6%80%81%E7%BC%93%E5%AD%98"><span class="toc-number">1.9.</span> <span class="toc-text">九、关注状态缓存</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#9-1-Redis-Key"><span class="toc-number">1.9.1.</span> <span class="toc-text">9.1 Redis Key</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#9-2-%E5%8D%95%E4%B8%AA%E7%8A%B6%E6%80%81%E6%9F%A5%E8%AF%A2%E6%8E%A5%E5%8F%A3"><span class="toc-number">1.9.2.</span> <span class="toc-text">9.2 单个状态查询接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#9-3-isFollowing-SQL"><span class="toc-number">1.9.3.</span> <span class="toc-text">9.3 isFollowing() SQL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#9-4-%E6%89%B9%E9%87%8F%E6%9F%A5%E8%AF%A2%E5%85%B3%E6%B3%A8%E7%8A%B6%E6%80%81"><span class="toc-number">1.9.4.</span> <span class="toc-text">9.4 批量查询关注状态</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E3%80%81%E5%85%B1%E5%90%8C%E5%85%B3%E6%B3%A8"><span class="toc-number">1.10.</span> <span class="toc-text">十、共同关注</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#10-1-%E6%8E%A5%E5%8F%A3"><span class="toc-number">1.10.1.</span> <span class="toc-text">10.1 接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#10-2-%E8%B0%83%E7%94%A8%E9%93%BE"><span class="toc-number">1.10.2.</span> <span class="toc-text">10.2 调用链</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%B8%80%E3%80%81%E5%85%B3%E6%B3%A8%E5%8A%A8%E6%80%81-Feed"><span class="toc-number">1.11.</span> <span class="toc-text">十一、关注动态 Feed</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#11-1-%E6%8E%A5%E5%8F%A3"><span class="toc-number">1.11.1.</span> <span class="toc-text">11.1 接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#11-2-%E5%AE%8C%E6%95%B4%E8%B0%83%E7%94%A8%E9%93%BE"><span class="toc-number">1.11.2.</span> <span class="toc-text">11.2 完整调用链</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#11-3-selectFeedOfFollow-%E7%9A%84%E4%BD%9C%E7%94%A8"><span class="toc-number">1.11.3.</span> <span class="toc-text">11.3 selectFeedOfFollow() 的作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#11-4-minTime-%E5%92%8C-offset-%E7%9A%84%E8%AE%BE%E8%AE%A1%E7%9B%AE%E7%9A%84"><span class="toc-number">1.11.4.</span> <span class="toc-text">11.4 minTime 和 offset 的设计目的</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%BA%8C%E3%80%81%E5%85%B3%E6%B3%A8%E7%8A%B6%E6%80%81%E5%A6%82%E4%BD%95%E8%BF%9B%E5%85%A5%E5%8D%9A%E5%AE%A2%E5%93%8D%E5%BA%94"><span class="toc-number">1.12.</span> <span class="toc-text">十二、关注状态如何进入博客响应</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#12-1-%E5%8D%9A%E5%AE%A2%E8%AF%A6%E6%83%85"><span class="toc-number">1.12.1.</span> <span class="toc-text">12.1 博客详情</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#12-2-%E5%85%AC%E5%85%B1-Feed-%E5%92%8C%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F"><span class="toc-number">1.12.2.</span> <span class="toc-text">12.2 公共 Feed 和我的收藏</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#12-3-%E5%85%B3%E6%B3%A8%E5%8A%A8%E6%80%81"><span class="toc-number">1.12.3.</span> <span class="toc-text">12.3 关注动态</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%B8%89%E3%80%81%E5%90%84%E6%96%B9%E6%B3%95%E7%9A%84%E8%B0%83%E7%94%A8%E8%80%85%E5%92%8C%E8%81%8C%E8%B4%A3"><span class="toc-number">1.13.</span> <span class="toc-text">十三、各方法的调用者和职责</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E5%9B%9B%E3%80%81%E5%B9%B6%E5%8F%91%E5%92%8C%E5%B9%82%E7%AD%89%E8%A1%8C%E4%B8%BA"><span class="toc-number">1.14.</span> <span class="toc-text">十四、并发和幂等行为</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#14-1-%E5%A4%9A%E6%AC%A1%E5%B9%B6%E5%8F%91%E5%85%B3%E6%B3%A8"><span class="toc-number">1.14.1.</span> <span class="toc-text">14.1 多次并发关注</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#14-2-%E5%A4%9A%E6%AC%A1%E5%B9%B6%E5%8F%91%E5%8F%96%E6%B6%88"><span class="toc-number">1.14.2.</span> <span class="toc-text">14.2 多次并发取消</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#14-3-%E5%85%B3%E6%B3%A8%E5%92%8C%E5%8F%96%E6%B6%88%E5%90%8C%E6%97%B6%E5%8F%91%E7%94%9F"><span class="toc-number">1.14.3.</span> <span class="toc-text">14.3 关注和取消同时发生</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%BA%94%E3%80%81%E5%BD%93%E5%89%8D%E5%AE%9E%E7%8E%B0%E7%9A%84%E8%BE%B9%E7%95%8C%E5%92%8C%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-number">1.15.</span> <span class="toc-text">十五、当前实现的边界和注意事项</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#15-1-%E5%85%B3%E6%B3%A8%E5%8A%A8%E6%80%81%E7%9A%84%E5%90%8C%E6%97%B6%E9%97%B4%E6%88%B3%E5%88%86%E9%A1%B5%E5%AD%98%E5%9C%A8%E8%B7%B3%E8%BF%87%E9%A3%8E%E9%99%A9"><span class="toc-number">1.15.1.</span> <span class="toc-text">15.1 关注动态的同时间戳分页存在跳过风险</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#15-2-%E5%85%B3%E6%B3%A8%E5%8A%A8%E6%80%81%E6%B2%A1%E6%9C%89%E5%86%99%E6%89%A9%E6%95%A3"><span class="toc-number">1.15.2.</span> <span class="toc-text">15.2 关注动态没有写扩散</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#15-3-%E5%85%B3%E6%B3%A8%E5%85%B3%E7%B3%BB%E9%87%87%E7%94%A8%E7%89%A9%E7%90%86%E5%88%A0%E9%99%A4"><span class="toc-number">1.15.3.</span> <span class="toc-text">15.3 关注关系采用物理删除</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#15-4-Redis-%E6%98%AF%E7%BC%93%E5%AD%98%EF%BC%8C%E4%B8%8D%E6%98%AF%E5%85%B3%E7%B3%BB%E4%BA%8B%E5%AE%9E"><span class="toc-number">1.15.4.</span> <span class="toc-text">15.4 Redis 是缓存，不是关系事实</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#15-5-%E7%BC%93%E5%AD%98%E6%9B%B4%E6%96%B0%E5%A4%B1%E8%B4%A5%E7%9A%84%E7%9F%AD%E6%9A%82%E4%B8%8D%E4%B8%80%E8%87%B4"><span class="toc-number">1.15.5.</span> <span class="toc-text">15.5 缓存更新失败的短暂不一致</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#15-6-orNot-%E5%AF%B9%E4%B8%8D%E5%AD%98%E5%9C%A8%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A1%8C%E4%B8%BA"><span class="toc-number">1.15.6.</span> <span class="toc-text">15.6 orNot 对不存在目标的行为</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#15-7-%E5%85%B3%E6%B3%A8%E7%BB%9F%E8%AE%A1%E6%98%AF%E6%B4%BE%E7%94%9F%E6%95%B0%E6%8D%AE"><span class="toc-number">1.15.7.</span> <span class="toc-text">15.7 关注统计是派生数据</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#15-8-%E6%95%B0%E6%8D%AE%E5%BA%93%E6%B2%A1%E6%9C%89%E5%A3%B0%E6%98%8E%E5%A4%96%E9%94%AE"><span class="toc-number">1.15.8.</span> <span class="toc-text">15.8 数据库没有声明外键</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E5%85%AD%E3%80%81%E6%8E%A8%E8%8D%90%E9%AA%8C%E8%AF%81%E9%A1%BA%E5%BA%8F"><span class="toc-number">1.16.</span> <span class="toc-text">十六、推荐验证顺序</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%B8%83%E3%80%81%E6%80%BB%E7%BB%93"><span class="toc-number">1.17.</span> <span class="toc-text">十七、总结</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%85%B3%E6%B3%A8%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃关注模块后端代码设计与讲解"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃关注模块后端代码设计与讲解"/></a><div class="content"><a class="title" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%85%B3%E6%B3%A8%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃关注模块后端代码设计与讲解">雀跃关注模块后端代码设计与讲解</a><time datetime="2026-09-12T04:00:00.000Z" title="发表于 2026-09-12 12:00:00">2026-09-12</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃Feed三级缓存、反向索引与我的收藏前后端联调"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃Feed三级缓存、反向索引与我的收藏前后端联调"/></a><div class="content"><a class="title" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃Feed三级缓存、反向索引与我的收藏前后端联调">雀跃Feed三级缓存、反向索引与我的收藏前后端联调</a><time datetime="2026-09-12T03:00:00.000Z" title="发表于 2026-09-12 11:00:00">2026-09-12</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃Feed三级缓存、反向索引与我的收藏后端代码设计与讲解"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃Feed三级缓存、反向索引与我的收藏后端代码设计与讲解"/></a><div class="content"><a class="title" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃Feed三级缓存、反向索引与我的收藏后端代码设计与讲解">雀跃Feed三级缓存、反向索引与我的收藏后端代码设计与讲解</a><time datetime="2026-09-12T02:00:00.000Z" title="发表于 2026-09-12 10:00:00">2026-09-12</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/07/local/%E9%9B%80%E8%B7%83%E5%8D%9A%E5%AE%A2%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%BA%93%E6%A3%80%E6%9F%A5%E7%82%B9%E6%94%B9/" title="雀跃公共feed流改造 3"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃公共feed流改造 3"/></a><div class="content"><a class="title" href="/2026/09/07/local/%E9%9B%80%E8%B7%83%E5%8D%9A%E5%AE%A2%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%BA%93%E6%A3%80%E6%9F%A5%E7%82%B9%E6%94%B9/" title="雀跃公共feed流改造 3">雀跃公共feed流改造 3</a><time datetime="2026-09-07T12:00:00.000Z" title="发表于 2026-09-07 20:00:00">2026-09-07</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/04/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃商铺与商品申请审核前后端联调"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃商铺与商品申请审核前后端联调"/></a><div class="content"><a class="title" href="/2026/09/04/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃商铺与商品申请审核前后端联调">雀跃商铺与商品申请审核前后端联调</a><time datetime="2026-09-04T04:00:00.000Z" title="发表于 2026-09-04 12:00:00">2026-09-04</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/./img/3.jpg);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By specialweek4</span></div><div class="footer_custom_text">❀写下我想说的话，听我想听的歌。🎸🎶❀</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.4"></script></div></div></body></html>

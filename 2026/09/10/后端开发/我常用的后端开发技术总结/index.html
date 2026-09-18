@@ -1,0 +1,888 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>我常用的后端开发技术总结 | specialweek4博客</title><meta name="author" content="specialweek4"><meta name="copyright" content="specialweek4"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="后端开发我常用的方法使用本地缓存在CacheProperties中配置 1234567@Datapublic static class MineCfg &#123;    &#x2F;&#x2F; TTL（秒）：写入后在本地缓存中保留的时长。    private int ttlSeconds &#x3D; 10;    &#x2F;&#x2F; 最大条目数：超过后按 Caffeine 策略逐出。    private long maxSize">
+<meta property="og:type" content="article">
+<meta property="og:title" content="我常用的后端开发技术总结">
+<meta property="og:url" content="https://specialweek4.github.io/2026/09/10/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/%E6%88%91%E5%B8%B8%E7%94%A8%E7%9A%84%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%93/index.html">
+<meta property="og:site_name" content="specialweek4博客">
+<meta property="og:description" content="后端开发我常用的方法使用本地缓存在CacheProperties中配置 1234567@Datapublic static class MineCfg &#123;    &#x2F;&#x2F; TTL（秒）：写入后在本地缓存中保留的时长。    private int ttlSeconds &#x3D; 10;    &#x2F;&#x2F; 最大条目数：超过后按 Caffeine 策略逐出。    private long maxSize">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://specialweek4.github.io/img/3.jpg">
+<meta property="article:published_time" content="2026-09-10T06:11:42.000Z">
+<meta property="article:modified_time" content="2026-09-18T07:45:15.259Z">
+<meta property="article:author" content="specialweek4">
+<meta property="article:tag" content="后端开发">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://specialweek4.github.io/img/3.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "我常用的后端开发技术总结",
+  "url": "https://specialweek4.github.io/2026/09/10/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/%E6%88%91%E5%B8%B8%E7%94%A8%E7%9A%84%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%93/",
+  "image": "https://specialweek4.github.io/img/3.jpg",
+  "datePublished": "2026-09-10T06:11:42.000Z",
+  "dateModified": "2026-09-18T07:45:15.259Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "specialweek4",
+      "url": "https://specialweek4.github.io"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="https://specialweek4.github.io/2026/09/10/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/%E6%88%91%E5%B8%B8%E7%94%A8%E7%9A%84%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91%E6%8A%80%E6%9C%AF%E6%80%BB%E7%BB%93/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="stylesheet" href="/css/index.css?v=5.5.4"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: {"path":"/search.xml","preload":false,"top_n_per_article":1,"unescape":false,"pagination":{"enable":false,"hitsPerPage":8},"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":200,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '我常用的后端开发技术总结',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 8.1.2"></head><body><div class="bg-animation" id="web_bg" style="background-image: url(/./img/14.png);"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">72</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">23</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">16</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/./img/3.jpg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">specialweek4博客</span></a><a class="nav-page-title" href="/"><span class="site-name">我常用的后端开发技术总结</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fas fa-list"></i><span> 链接</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友情链接</span></a></li><li><a class="site-page child" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></li></ul></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">我常用的后端开发技术总结</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-09-10T06:11:42.000Z" title="发表于 2026-09-10 14:11:42">2026-09-10</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-09-18T07:45:15.259Z" title="更新于 2026-09-18 15:45:15">2026-09-18</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/">后端开发</a></span></div><div class="meta-secondline"></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="后端开发我常用的方法"><a href="#后端开发我常用的方法" class="headerlink" title="后端开发我常用的方法"></a>后端开发我常用的方法</h1><h1 id="使用本地缓存"><a href="#使用本地缓存" class="headerlink" title="使用本地缓存"></a>使用本地缓存</h1><p>在CacheProperties中配置</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">class</span> <span class="title class_">MineCfg</span> &#123;</span><br><span class="line">    <span class="comment">// TTL（秒）：写入后在本地缓存中保留的时长。</span></span><br><span class="line">    <span class="keyword">private</span> <span class="type">int</span> <span class="variable">ttlSeconds</span> <span class="operator">=</span> <span class="number">10</span>;</span><br><span class="line">    <span class="comment">// 最大条目数：超过后按 Caffeine 策略逐出。</span></span><br><span class="line">    <span class="keyword">private</span> <span class="type">long</span> <span class="variable">maxSize</span> <span class="operator">=</span> <span class="number">1000</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>还是在CacheProperties创建L2</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="type">L2</span> <span class="variable">l2</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">L2</span>();</span><br><span class="line"></span><br><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">class</span> <span class="title class_">L2</span> &#123;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>把MineCfg（这是自定义的名字）加到L2中,完整代码如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Component</span></span><br><span class="line"><span class="meta">@ConfigurationProperties(prefix = &quot;cache&quot;)</span></span><br><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CacheProperties</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="type">L2</span> <span class="variable">l2</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">L2</span>();</span><br><span class="line">    <span class="meta">@Data</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">class</span> <span class="title class_">L2</span> &#123;</span><br><span class="line">        <span class="keyword">private</span> <span class="type">MineCfg</span> <span class="variable">mineCfg</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">MineCfg</span>();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="meta">@Data</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">class</span> <span class="title class_">MineCfg</span> &#123;</span><br><span class="line">        <span class="comment">// TTL（秒）：写入后在本地缓存中保留的时长。</span></span><br><span class="line">        <span class="keyword">private</span> <span class="type">int</span> <span class="variable">ttlSeconds</span> <span class="operator">=</span> <span class="number">10</span>;</span><br><span class="line">        <span class="comment">// 最大条目数：超过后按 Caffeine 策略逐出。</span></span><br><span class="line">        <span class="keyword">private</span> <span class="type">long</span> <span class="variable">maxSize</span> <span class="operator">=</span> <span class="number">1000</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>最后创建CacheConfig文件创建Bean使用就行了</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Configuration</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CacheConfig</span> &#123;</span><br><span class="line">    <span class="comment">//定义Bean的名字</span></span><br><span class="line">    <span class="meta">@Bean(&quot;feedMineCache&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> Cache&lt;String, FeedPageResponse&gt; <span class="title function_">feedMineCache</span><span class="params">(CacheProperties props)</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> Caffeine.newBuilder()</span><br><span class="line">                .maximumSize(props.getL2().getMineCfg().getMaxSize())</span><br><span class="line">                .expireAfterWrite(Duration.ofSeconds(props.getL2().getMineCfg().getTtlSeconds()))</span><br><span class="line">                .build();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后在yaml配置文件中配置好属性值就行了</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">cache:</span></span><br><span class="line">  <span class="attr">l2:</span></span><br><span class="line">    <span class="attr">mine-cfg:</span></span><br><span class="line">      <span class="attr">ttl-seconds:</span> <span class="number">10</span></span><br><span class="line">      <span class="attr">max-size:</span> <span class="number">1000</span></span><br></pre></td></tr></table></figure>
+
+<h1 id="序列化和反序列化"><a href="#序列化和反序列化" class="headerlink" title="序列化和反序列化"></a>序列化和反序列化</h1><h2 id="对象转Json"><a href="#对象转Json" class="headerlink" title="对象转Json"></a>对象转Json</h2><p>1.java对象转Json，用的是Spring管理的ObjectMapper</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> ObjectMapper objectMapper;</span><br><span class="line"></span><br><span class="line"><span class="type">String</span> <span class="variable">json</span> <span class="operator">=</span> objectMapper.writeValueAsString(page);</span><br><span class="line"></span><br><span class="line">redis.opsForValue().set(key, json, ttl);</span><br><span class="line"><span class="comment">//读取时，先取字符串，再反序列化</span></span><br><span class="line"><span class="type">String</span> <span class="variable">cachedJson</span> <span class="operator">=</span> redis.opsForValue().get(key);</span><br><span class="line"></span><br><span class="line"><span class="type">ProductFeedPageResponse</span> <span class="variable">cachedPage</span> <span class="operator">=</span> objectMapper.readValue(</span><br><span class="line">        cachedJson,</span><br><span class="line">        ProductFeedPageResponse.class</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>2.使用hutool的JsonUtil</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//序列化</span></span><br><span class="line">stringRedisTemplate.opsForValue().set(</span><br><span class="line">        key,</span><br><span class="line">        JSONUtil.toJsonStr(value),</span><br><span class="line">        time,</span><br><span class="line">        unit</span><br><span class="line">);</span><br><span class="line"><span class="comment">//反序列化</span></span><br><span class="line"><span class="type">String</span> <span class="variable">json</span> <span class="operator">=</span> stringRedisTemplate.opsForValue().get(key);</span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> JSONUtil.toBean(json, type);</span><br></pre></td></tr></table></figure>
+
+<p>需要注意的是商铺采用逻辑过期的方式，还包了一层 <code>RedisData</code>；</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RedisData</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> LocalDateTime expireTime;</span><br><span class="line">    <span class="keyword">private</span> Object data;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由于 <code>data</code> 声明为 <code>Object</code>，反序列化时不能直接知道里面是 <code>Shop</code>，所以代码分两步转换：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">RedisData</span> <span class="variable">redisData</span> <span class="operator">=</span> JSONUtil.toBean(json, RedisData.class);</span><br><span class="line"></span><br><span class="line"><span class="type">JSONObject</span> <span class="variable">data</span> <span class="operator">=</span> (JSONObject) redisData.getData();</span><br><span class="line"></span><br><span class="line"><span class="type">R</span> <span class="variable">result</span> <span class="operator">=</span> JSONUtil.toBean(data, type);</span><br></pre></td></tr></table></figure>
+
+<h2 id="计数二进制存储"><a href="#计数二进制存储" class="headerlink" title="计数二进制存储"></a>计数二进制存储</h2><p>1.计数转成二进制</p>
+<p>把一个计数写成 <strong>4 字节无符号整数，采用大端序</strong>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">writeInt32BE</span><span class="params">(<span class="type">byte</span>[] buf, <span class="type">int</span> off, <span class="type">long</span> val)</span> &#123;</span><br><span class="line">    <span class="type">long</span> <span class="variable">n</span> <span class="operator">=</span> Math.max(<span class="number">0</span>, Math.min(val, <span class="number">0xFFFF_FFFFL</span>));</span><br><span class="line"></span><br><span class="line">    buf[off] = (<span class="type">byte</span>) ((n &gt;&gt;&gt; <span class="number">24</span>) &amp; <span class="number">0xFF</span>);</span><br><span class="line">    buf[off + <span class="number">1</span>] = (<span class="type">byte</span>) ((n &gt;&gt;&gt; <span class="number">16</span>) &amp; <span class="number">0xFF</span>);</span><br><span class="line">    buf[off + <span class="number">2</span>] = (<span class="type">byte</span>) ((n &gt;&gt;&gt; <span class="number">8</span>) &amp; <span class="number">0xFF</span>);</span><br><span class="line">    buf[off + <span class="number">3</span>] = (<span class="type">byte</span>) (n &amp; <span class="number">0xFF</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><figcaption><span>Text</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">buf：存放全部计数的字节数组</span><br><span class="line">off：这个计数在数组中的起始位置</span><br><span class="line">val：要保存的计数</span><br><span class="line">例如：100就是</span><br><span class="line">十六进制：00 00 00 64</span><br><span class="line">二进制：  00000000 00000000 00000000 01100100</span><br></pre></td></tr></table></figure>
+
+<p>大端序就是高位字节放在前面。代码还会把数值限制在 <code>0～4294967295</code>，即 4 字节无符号整数的范围。</p>
+<p>2.存入Redis</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title function_">setRaw</span><span class="params">(String key, <span class="type">byte</span>[] val)</span> &#123;</span><br><span class="line">    redis.execute((RedisCallback&lt;Void&gt;) connection -&gt; &#123;</span><br><span class="line">        connection.stringCommands().set(</span><br><span class="line">                key.getBytes(StandardCharsets.UTF_8),</span><br><span class="line">                val</span><br><span class="line">        );</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p><code>key.getBytes(UTF_8)</code>：把 Redis 键名编码为字节。因为用到了Redis底层通信传递的是字节，所以要把key也变成字节。</p>
+</li>
+<li><p><code>val</code>：已经编码好的二进制计数，直接写入。直接传buf数组</p>
+</li>
+<li><p><code>connection.stringCommands().set()</code>：执行 Redis <code>SET</code>。</p>
+</li>
+</ul>
+<p>buf字节数组的分组是这样的</p>
+<figure class="highlight plaintext"><figcaption><span>Text</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">00 00 00 00 | 00 00 00 64 | 00 00 00 14 | 00 00 00 00 | 00 00 00 00</span><br><span class="line">   阅读数       点赞100        收藏20         评论数         转发数</span><br><span class="line">   </span><br><span class="line">用 Arrays.toString(buf) 打印，看到的是十进制：</span><br><span class="line">[0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0]</span><br></pre></td></tr></table></figure>
+
+<p>每个计数字段以四个字节为一组</p>
+<p>3.读取</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//先取出字节数组 buf</span></span><br><span class="line"><span class="keyword">private</span> <span class="type">byte</span>[] getRaw(String key) &#123;</span><br><span class="line">    <span class="keyword">return</span> redis.execute((RedisCallback&lt;<span class="type">byte</span>[]&gt;) connection -&gt;</span><br><span class="line">            connection.stringCommands().get(</span><br><span class="line">                    key.getBytes(StandardCharsets.UTF_8)</span><br><span class="line">            )</span><br><span class="line">    );</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//4 个字节恢复计数的方法，根据偏移量来确定取出那个模块的计数：</span></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> <span class="type">long</span> <span class="title function_">readInt32BE</span><span class="params">(<span class="type">byte</span>[] buf, <span class="type">int</span> off)</span> &#123;</span><br><span class="line">    <span class="type">long</span> <span class="variable">n</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; <span class="number">4</span>; i++) &#123;</span><br><span class="line">        n = (n &lt;&lt; <span class="number">8</span>) | (buf[off + i] &amp; <span class="number">0xFFL</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> n;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h1 id="时间"><a href="#时间" class="headerlink" title="时间"></a>时间</h1><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//比如获取小时槽</span></span><br><span class="line"><span class="type">long</span> <span class="variable">hourSlot</span> <span class="operator">=</span> System.currentTimeMillis() / <span class="number">3_600_000L</span>;</span><br></pre></td></tr></table></figure>
+
+<h1 id="集合处理和按指定顺序重排"><a href="#集合处理和按指定顺序重排" class="headerlink" title="集合处理和按指定顺序重排"></a>集合处理和按指定顺序重排</h1><h2 id="数据库批量查询后恢复收藏顺序"><a href="#数据库批量查询后恢复收藏顺序" class="headerlink" title="数据库批量查询后恢复收藏顺序"></a>数据库批量查询后恢复收藏顺序</h2><p>我的收藏先查出按收藏时间排序的 Blog ID，再根据 ID 批量查询 Blog。<code>WHERE id IN (...)</code> 不保证按照传入的 ID 顺序返回，需要自己重排。</p>
+<p>比如 <code>ids = [8, 3, 10]</code>，数据库可能返回 <code>[Blog3, Blog10, Blog8]</code>。先创建 <code>ID → Blog</code> 的 Map，再按照 ids 取出对象，就恢复成 <code>[Blog8, Blog3, Blog10]</code>。</p>
+<p>下面是雀跃 <code>BlogFeedServiceImpl.Myfavs()</code> 使用的写法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">List&lt;BlogFeedRow&gt; rows = blogMapper.selectFeedByIds(ids);</span><br><span class="line"></span><br><span class="line">Map&lt;Long, BlogFeedRow&gt; mapRow = rows.stream()</span><br><span class="line">        .collect(Collectors.toMap(</span><br><span class="line">                BlogFeedRow::getId,</span><br><span class="line">                Function.identity()</span><br><span class="line">        ));</span><br><span class="line"></span><br><span class="line">List&lt;BlogFeedRow&gt; orderedRows = ids.stream()</span><br><span class="line">        .map(mapRow::get)</span><br><span class="line">        .filter(Objects::nonNull)</span><br><span class="line">        .toList();</span><br></pre></td></tr></table></figure>
+
+<p>需要的 import：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"><span class="keyword">import</span> java.util.Map;</span><br><span class="line"><span class="keyword">import</span> java.util.Objects;</span><br><span class="line"><span class="keyword">import</span> java.util.function.Function;</span><br><span class="line"><span class="keyword">import</span> java.util.stream.Collectors;</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>写法</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>rows.stream()</code></td>
+<td>把集合转换成流，组织后续处理步骤</td>
+</tr>
+<tr>
+<td><code>BlogFeedRow::getId</code></td>
+<td>相当于 <code>row -&gt; row.getId()</code>，提取 Map 的键</td>
+</tr>
+<tr>
+<td><code>Function.identity()</code></td>
+<td>相当于 <code>row -&gt; row</code>，对象本身作为 Map 的值</td>
+</tr>
+<tr>
+<td><code>Collectors.toMap()</code></td>
+<td>收集为 Map，方便按 ID 查询</td>
+</tr>
+<tr>
+<td><code>.map(mapRow::get)</code></td>
+<td>相当于 <code>id -&gt; mapRow.get(id)</code>，按照 ids 的顺序查找对象</td>
+</tr>
+<tr>
+<td><code>.filter(Objects::nonNull)</code></td>
+<td>跳过不存在、已删除或未发布而没有查到的 Blog</td>
+</tr>
+<tr>
+<td><code>.toList()</code></td>
+<td>收集成 List，Java 17 下返回的列表不可增删</td>
+</tr>
+</tbody></table>
+<p>这是集合重排，不是序列化或格式化。Map 的遍历顺序不重要，最终顺序由 <code>ids.stream()</code> 决定。两次线性遍历，平均时间复杂度为 O(n)，比每个 ID 都循环搜索全部 rows 更合适。</p>
+<p><code>Collectors.toMap()</code> 默认遇到重复键会抛异常。如果业务允许重复并且确定保留第一条，可以明确指定合并规则：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;Long, BlogFeedRow&gt; mapRow = rows.stream()</span><br><span class="line">        .collect(Collectors.toMap(</span><br><span class="line">                BlogFeedRow::getId,</span><br><span class="line">                Function.identity(),</span><br><span class="line">                (first, second) -&gt; first</span><br><span class="line">        ));</span><br></pre></td></tr></table></figure>
+
+<p>不要为了隐藏 JOIN 导致的错误重复数据，随意加合并规则。过滤失效 Blog 后一页可能不足 size 条；这个重排方法不会自动补齐分页。</p>
+<h2 id="去重、转换和分组"><a href="#去重、转换和分组" class="headerlink" title="去重、转换和分组"></a>去重、转换和分组</h2><p>Feed 批量查询作者资料前，可以先对作者 ID 去重，避免重复查询：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">List&lt;Long&gt; authorIds = rows.stream()</span><br><span class="line">        .map(BlogFeedRow::getUserId)</span><br><span class="line">        .filter(Objects::nonNull)</span><br><span class="line">        .distinct()</span><br><span class="line">        .toList();</span><br></pre></td></tr></table></figure>
+
+<p>需要把 Blog 按作者分组时：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;Long, List&lt;BlogFeedRow&gt;&gt; rowsByAuthor = rows.stream()</span><br><span class="line">        .collect(Collectors.groupingBy(BlogFeedRow::getUserId));</span><br></pre></td></tr></table></figure>
+
+<p>单个 ID 对应一个对象用 <code>toMap()</code>；一个作者对应多篇 Blog 用 <code>groupingBy()</code>。<code>distinct()</code> 根据 <code>equals()</code> 判断重复，不会自动根据对象的 id 字段去重。</p>
+<h1 id="时间、金额和字符串格式化"><a href="#时间、金额和字符串格式化" class="headerlink" title="时间、金额和字符串格式化"></a>时间、金额和字符串格式化</h1><h2 id="时间转字符串和字符串转时间"><a href="#时间转字符串和字符串转时间" class="headerlink" title="时间转字符串和字符串转时间"></a>时间转字符串和字符串转时间</h2><p><code>DateTimeFormatter</code> 是 <code>java.time.format</code> 包中的日期时间格式化器，负责定义时间与文本之间的转换规则。它不可变且线程安全，固定格式可以定义为 <code>static final</code> 常量复用。严格校验输入日期时可使用 <code>DateTimeFormatter.ofPattern(&quot;uuuu-MM-dd&quot;).withResolverStyle(ResolverStyle.STRICT)</code>，其中 <code>ResolverStyle</code> 也位于 <code>java.time.format</code> 包。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//用的是java.time.format.DateTimeFormatter</span></span><br><span class="line"><span class="type">DateTimeFormatter</span> <span class="variable">formatter</span> <span class="operator">=</span> DateTimeFormatter.ofPattern(<span class="string">&quot;yyyy-MM-dd HH:mm:ss&quot;</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">LocalDateTime</span> <span class="variable">now</span> <span class="operator">=</span> LocalDateTime.now();</span><br><span class="line"><span class="type">String</span> <span class="variable">text</span> <span class="operator">=</span> now.format(formatter);</span><br><span class="line"></span><br><span class="line"><span class="type">LocalDateTime</span> <span class="variable">parsed</span> <span class="operator">=</span> LocalDateTime.parse(<span class="string">&quot;2026-09-18 14:30:00&quot;</span>, formatter);</span><br></pre></td></tr></table></figure>
+
+<p>需要导入 <code>java.time.LocalDateTime</code> 和 <code>java.time.format.DateTimeFormatter</code>。</p>
+<p><code>format()</code> 用于时间转文本，<code>parse()</code> 用于文本转时间。格式里的 <code>MM</code> 表示月份，<code>mm</code> 表示分钟；<code>HH</code> 是 24 小时制，<code>hh</code> 是 12 小时制。普通年月日不要误用表示周年份的 <code>YYYY</code>。</p>
+<h2 id="时间戳和时区"><a href="#时间戳和时区" class="headerlink" title="时间戳和时区"></a>时间戳和时区</h2><p><code>LocalDateTime</code> 不包含时区；从时间戳转换时，需要明确按哪个地区显示：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">long</span> <span class="variable">millis</span> <span class="operator">=</span> System.currentTimeMillis();</span><br><span class="line"><span class="type">Instant</span> <span class="variable">instant</span> <span class="operator">=</span> Instant.ofEpochMilli(millis);</span><br><span class="line"><span class="type">ZoneId</span> <span class="variable">zone</span> <span class="operator">=</span> ZoneId.of(<span class="string">&quot;Asia/Shanghai&quot;</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">LocalDateTime</span> <span class="variable">localTime</span> <span class="operator">=</span> LocalDateTime.ofInstant(instant, zone);</span><br><span class="line"><span class="type">long</span> <span class="variable">restoredMillis</span> <span class="operator">=</span> localTime.atZone(zone).toInstant().toEpochMilli();</span><br></pre></td></tr></table></figure>
+
+<p>这里使用 <code>java.time.Instant</code> 和 <code>java.time.ZoneId</code>。不要把秒级时间戳直接交给 <code>ofEpochMilli()</code>，否则结果会接近 1970 年。</p>
+<p>小时槽是把时间戳按整小时分组：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">long</span> <span class="variable">hourSlot</span> <span class="operator">=</span> System.currentTimeMillis() / <span class="number">3_600_000L</span>;</span><br><span class="line"><span class="type">Duration</span> <span class="variable">ttl</span> <span class="operator">=</span> Duration.ofSeconds(<span class="number">30</span>);</span><br></pre></td></tr></table></figure>
+
+<p>小时槽可以参与 Feed 缓存键，但它不是格式化后的小时，也不等于缓存过期时间。TTL 仍需单独设置。</p>
+<h2 id="金额分和元的转换"><a href="#金额分和元的转换" class="headerlink" title="金额分和元的转换"></a>金额分和元的转换</h2><p>商品价格等字段采用整数分保存。不同业务字段要看自己的约定，不能把所有金额字段都直接除以 100。</p>
+<p>下面两个方法可放入金额工具类，依赖 <code>java.math.BigDecimal</code> 和 <code>java.math.RoundingMode</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 将整数分格式化为保留两位小数的元</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> fen</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> String <span class="title function_">fenToYuan</span><span class="params">(<span class="type">long</span> fen)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> BigDecimal.valueOf(fen, <span class="number">2</span>)</span><br><span class="line">            .setScale(<span class="number">2</span>, RoundingMode.UNNECESSARY)</span><br><span class="line">            .toPlainString();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 将元字符串转换为整数分并拒绝无法精确表示为分的金额</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> yuan</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="type">long</span> <span class="title function_">yuanToFen</span><span class="params">(String yuan)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">BigDecimal</span>(yuan)</span><br><span class="line">            .movePointRight(<span class="number">2</span>)</span><br><span class="line">            .longValueExact();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">String</span> <span class="variable">priceText</span> <span class="operator">=</span> fenToYuan(<span class="number">3500L</span>);</span><br><span class="line"><span class="type">long</span> <span class="variable">priceFen</span> <span class="operator">=</span> yuanToFen(<span class="string">&quot;35.00&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>分别得到 <code>&quot;35.00&quot;</code> 和 <code>3500</code>。<code>yuanToFen(&quot;35.001&quot;)</code> 会抛异常，避免静默丢失小数。非负、最大金额等业务范围还需要另行校验。</p>
+<p>优先用 <code>new BigDecimal(&quot;0.1&quot;)</code> 或 <code>BigDecimal.valueOf(...)</code>，不要用 <code>new BigDecimal(0.1)</code> 引入 double 的二进制精度误差。比较金额数值时常用 <code>compareTo()</code>；<code>equals()</code> 还会比较小数位数。</p>
+<h2 id="字符串模板和分隔"><a href="#字符串模板和分隔" class="headerlink" title="字符串模板和分隔"></a>字符串模板和分隔</h2><p>生成 Redis 键时会使用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> String.format(<span class="string">&quot;cnt:%s:%s:%s&quot;</span>, <span class="string">&quot;v1&quot;</span>, <span class="string">&quot;blog&quot;</span>, <span class="string">&quot;123&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>得到 <code>cnt:v1:blog:123</code>。<code>%s</code> 填入字符串表示，<code>%d</code> 填入整数。重要缓存键最好集中在工具类生成，避免不同方法拼接规则不一致。</p>
+<p>部分图片字段用逗号分隔，可以这样清理为空的条目：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">List&lt;String&gt; urls = Arrays.stream(images.split(<span class="string">&quot;,&quot;</span>))</span><br><span class="line">        .map(String::trim)</span><br><span class="line">        .filter(url -&gt; !url.isEmpty())</span><br><span class="line">        .toList();</span><br><span class="line"></span><br><span class="line"><span class="type">String</span> <span class="variable">joined</span> <span class="operator">=</span> String.join(<span class="string">&quot;,&quot;</span>, urls);</span><br></pre></td></tr></table></figure>
+
+<p>先处理 <code>images == null</code> 的情况。这种分隔只适用于项目约定的图片字段，不是通用 CSV 解析；任意文本或可能包含逗号的 URL 更适合使用 JSON 数组。</p>
+<h1 id="泛型集合的反序列化"><a href="#泛型集合的反序列化" class="headerlink" title="泛型集合的反序列化"></a>泛型集合的反序列化</h1><p>前面使用 <code>ProductFeedPageResponse.class</code>，Jackson 可以从 DTO 的字段声明知道 items 的元素类型。但直接反序列化 <code>List&lt;BlogFeedRow&gt;</code> 时，不能只传 <code>List.class</code>，否则元素通常会变成 Map。</p>
+<p>使用 Jackson 的 <code>TypeReference</code> 保留泛型信息：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> com.fasterxml.jackson.core.type.TypeReference;</span><br><span class="line"></span><br><span class="line">List&lt;BlogFeedRow&gt; rows = objectMapper.readValue(</span><br><span class="line">        json,</span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">TypeReference</span>&lt;List&lt;BlogFeedRow&gt;&gt;() &#123;&#125;</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>Map 也一样：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;String, Long&gt; counts = objectMapper.readValue(</span><br><span class="line">        json,</span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">TypeReference</span>&lt;Map&lt;String, Long&gt;&gt;() &#123;&#125;</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>继续使用 Spring 注入的 ObjectMapper，可以复用项目的日期等配置。转换异常需要捕获或向上抛出；缓存中的 JSON 损坏时可以按缓存未命中处理并记录日志，请求参数解析失败则应返回清晰错误。</p>
+<h1 id="Redis-常用操作"><a href="#Redis-常用操作" class="headerlink" title="Redis 常用操作"></a>Redis 常用操作</h1><p>下面的 <code>redis</code> 指注入的 <code>StringRedisTemplate</code>。示例中的 key、字段名和 TTL 根据业务确定，不是要求在一个方法里全部执行。</p>
+<h2 id="String、Hash、List-和-Set"><a href="#String、Hash、List-和-Set" class="headerlink" title="String、Hash、List 和 Set"></a>String、Hash、List 和 Set</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">redis.opsForValue().set(<span class="string">&quot;demo:name&quot;</span>, <span class="string">&quot;雀跃&quot;</span>, Duration.ofMinutes(<span class="number">5</span>));</span><br><span class="line"><span class="type">String</span> <span class="variable">name</span> <span class="operator">=</span> redis.opsForValue().get(<span class="string">&quot;demo:name&quot;</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">Long</span> <span class="variable">version</span> <span class="operator">=</span> redis.opsForValue().increment(<span class="string">&quot;demo:version&quot;</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">Long</span> <span class="variable">count</span> <span class="operator">=</span> redis.opsForHash().increment(<span class="string">&quot;demo:counts&quot;</span>, <span class="string">&quot;fav&quot;</span>, <span class="number">1L</span>);</span><br><span class="line"></span><br><span class="line">redis.opsForList().rightPushAll(<span class="string">&quot;demo:ids&quot;</span>, List.of(<span class="string">&quot;8&quot;</span>, <span class="string">&quot;3&quot;</span>, <span class="string">&quot;10&quot;</span>));</span><br><span class="line">List&lt;String&gt; ids = redis.opsForList().range(<span class="string">&quot;demo:ids&quot;</span>, <span class="number">0</span>, <span class="number">9</span>);</span><br><span class="line"></span><br><span class="line">redis.opsForSet().add(<span class="string">&quot;demo:pages&quot;</span>, <span class="string">&quot;10:1&quot;</span>, <span class="string">&quot;10:2&quot;</span>);</span><br><span class="line">Set&lt;String&gt; pages = redis.opsForSet().members(<span class="string">&quot;demo:pages&quot;</span>);</span><br><span class="line"></span><br><span class="line">redis.expire(<span class="string">&quot;demo:ids&quot;</span>, Duration.ofSeconds(<span class="number">60</span>));</span><br><span class="line">redis.delete(<span class="string">&quot;demo:name&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>String：适合 JSON、验证码、版本号、空值标记。</li>
+<li>Hash：适合多个字段和计数增量。</li>
+<li>List：保留元素顺序，公共 Feed 用来保存 ID 页面；<code>range()</code> 的结束下标包含在结果里。</li>
+<li>Set：元素去重，不保证遍历顺序，适合缓存反向索引。</li>
+</ul>
+<p><code>increment()</code> 可以原子递增数值，但不会自动添加 TTL。List 的追加操作和后面的 <code>expire()</code> 是两条命令，并不是原子操作；重复 <code>rightPushAll()</code> 也不会替换旧页面，而是继续追加。</p>
+<h2 id="批量获取，减少一次一次请求-Redis"><a href="#批量获取，减少一次一次请求-Redis" class="headerlink" title="批量获取，减少一次一次请求 Redis"></a>批量获取，减少一次一次请求 Redis</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">List&lt;String&gt; keys = List.of(<span class="string">&quot;feed:item:8&quot;</span>, <span class="string">&quot;feed:item:3&quot;</span>, <span class="string">&quot;feed:item:10&quot;</span>);</span><br><span class="line">List&lt;String&gt; values = redis.opsForValue().multiGet(keys);</span><br></pre></td></tr></table></figure>
+
+<p>返回位置对应传入 key 的位置，某个 key 不存在时，对应元素为 null。项目据此把 Feed ID 列表还原成对象列表。</p>
+<p>不同命令需要批量发出时，可以使用 Pipeline：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">List&lt;Object&gt; results = redis.executePipelined((RedisCallback&lt;Object&gt;) connection -&gt; &#123;</span><br><span class="line">    <span class="keyword">for</span> (String key : bitmapKeys) &#123;</span><br><span class="line">        connection.stringCommands().bitCount(key.getBytes(StandardCharsets.UTF_8));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>回调返回 null，执行结果从 <code>executePipelined()</code> 的返回列表获取。Pipeline 主要减少网络往返，<strong>不保证这些命令整体原子执行</strong>。</p>
+<h2 id="Bitmap-保存用户状态"><a href="#Bitmap-保存用户状态" class="headerlink" title="Bitmap 保存用户状态"></a>Bitmap 保存用户状态</h2><p>雀跃把用户 ID 分片，每片 32768 个 bit：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">long</span> <span class="variable">chunk</span> <span class="operator">=</span> userId / <span class="number">32768</span>;</span><br><span class="line"><span class="type">long</span> <span class="variable">bit</span> <span class="operator">=</span> userId % <span class="number">32768</span>;</span><br><span class="line"><span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> <span class="string">&quot;bm:like:blog:&quot;</span> + blogId + <span class="string">&quot;:&quot;</span> + chunk;</span><br><span class="line"></span><br><span class="line">redis.opsForValue().setBit(key, bit, <span class="literal">true</span>);</span><br><span class="line"><span class="type">Boolean</span> <span class="variable">liked</span> <span class="operator">=</span> redis.opsForValue().getBit(key, bit);</span><br><span class="line"><span class="type">boolean</span> <span class="variable">active</span> <span class="operator">=</span> Boolean.TRUE.equals(liked);</span><br></pre></td></tr></table></figure>
+
+<p>这是基本 API 示例。实际点赞还涉及幂等判断和计数，项目使用 Lua 判断原来的 bit，不能简单地每次 setBit 后都给计数加一，否则重复点赞会重复计数。</p>
+<h1 id="Lua-原子判断和幂等"><a href="#Lua-原子判断和幂等" class="headerlink" title="Lua 原子判断和幂等"></a>Lua 原子判断和幂等</h1><p>幂等就是同一个操作重复执行，最终业务效果和执行一次一样。例如“收藏商品”执行两次，只产生一条有效收藏，不增加两次计数。</p>
+<p>雀跃的位图更新脚本把读取和判断写入放在一起：</p>
+<figure class="highlight lua"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">local</span> previous = redis.call(<span class="string">&#x27;GETBIT&#x27;</span>, KEYS[<span class="number">1</span>], <span class="built_in">tonumber</span>(ARGV[<span class="number">1</span>]))</span><br><span class="line"><span class="keyword">if</span> previous == <span class="number">1</span> <span class="keyword">then</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span></span><br><span class="line"><span class="keyword">end</span></span><br><span class="line">redis.call(<span class="string">&#x27;SETBIT&#x27;</span>, KEYS[<span class="number">1</span>], <span class="built_in">tonumber</span>(ARGV[<span class="number">1</span>]), <span class="number">1</span>)</span><br><span class="line"><span class="keyword">return</span> <span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<p>Java 调用示例，scriptText 为上面的脚本字符串：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">DefaultRedisScript&lt;Long&gt; script = <span class="keyword">new</span> <span class="title class_">DefaultRedisScript</span>&lt;&gt;();</span><br><span class="line">script.setScriptText(scriptText);</span><br><span class="line">script.setResultType(Long.class);</span><br><span class="line"></span><br><span class="line"><span class="type">Long</span> <span class="variable">changed</span> <span class="operator">=</span> redis.execute(script, List.of(bitmapKey), String.valueOf(bit));</span><br><span class="line"><span class="type">boolean</span> <span class="variable">updated</span> <span class="operator">=</span> Long.valueOf(<span class="number">1L</span>).equals(changed);</span><br></pre></td></tr></table></figure>
+
+<p>脚本对象通常作为 Bean 或成员复用。返回 1 表示新设置了状态，0 表示本来就已设置。</p>
+<p>Lua 能保证脚本内部命令不被其他客户端命令穿插，不能让脚本外的 MySQL 和 Redis 操作也变成一个事务。当前项目的位图脚本、聚合增量、脏版本是分开执行的，不能把整个计数更新过程说成全部原子。</p>
+<h1 id="数据库条件更新和避免旧对象覆盖"><a href="#数据库条件更新和避免旧对象覆盖" class="headerlink" title="数据库条件更新和避免旧对象覆盖"></a>数据库条件更新和避免旧对象覆盖</h1><h2 id="检查影响行数"><a href="#检查影响行数" class="headerlink" title="检查影响行数"></a>检查影响行数</h2><p>Java 中先判断 <code>auditStatus == 0</code> 不足以避免并发审核，两个管理员可能同时读到待审核。需要把条件也写进 SQL：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">UPDATE</span> tb_product_application</span><br><span class="line"><span class="keyword">SET</span> audit_status <span class="operator">=</span> <span class="number">1</span>,</span><br><span class="line">    audited_by <span class="operator">=</span> #&#123;adminId&#125;,</span><br><span class="line">    audited_time <span class="operator">=</span> NOW(),</span><br><span class="line">    approved_product_id <span class="operator">=</span> #&#123;productId&#125;,</span><br><span class="line">    images <span class="operator">=</span> #&#123;images&#125;,</span><br><span class="line">    reject_reason <span class="operator">=</span> <span class="keyword">NULL</span></span><br><span class="line"><span class="keyword">WHERE</span> id <span class="operator">=</span> #&#123;id&#125;</span><br><span class="line">  <span class="keyword">AND</span> audit_status <span class="operator">=</span> <span class="number">0</span></span><br></pre></td></tr></table></figure>
+
+<p><code>#{...}</code> 是 MyBatis 的绑定参数，不是在数据库控制台直接执行的占位格式。避免用 <code>${...}</code> 拼接用户提供的 SQL 内容。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="variable">changed</span> <span class="operator">=</span> applicationMapper.approve(id, adminId, product.getId(), images);</span><br><span class="line"><span class="keyword">if</span> (changed != <span class="number">1</span>) &#123;</span><br><span class="line">    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">IllegalStateException</span>(<span class="string">&quot;申请状态更新失败&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>0 行表示这次没有成功更新，可能是记录不存在或状态已改变。此时抛出异常，让外围事务回滚新创建的商品。</p>
+<h2 id="不要在条件更新后回写旧对象"><a href="#不要在条件更新后回写旧对象" class="headerlink" title="不要在条件更新后回写旧对象"></a>不要在条件更新后回写旧对象</h2><p>雀跃曾出现过审核通过后又回到待审核的问题：审核前读出的 app 仍然带着 <code>auditStatus = 0</code>，在 approve 后执行 <code>updateById(app)</code>，又把旧状态写回数据库。</p>
+<p>修复方法是把正式图片地址一起交给 approve 更新，不再为了保存图片而回写整个 app。商铺新建和资料修改审核采用相同处理。</p>
+<p><code>updateById()</code> 不是只更新“你刚刚调用 setter 的字段”。它根据实体字段和 MyBatis-Plus 的更新策略生成 SQL。特别是设置 null 默认可能被忽略，需要清空拒绝原因时，用明确的 <code>reject_reason = NULL</code> 更清楚。</p>
+<h1 id="事务和提交后清理缓存"><a href="#事务和提交后清理缓存" class="headerlink" title="事务和提交后清理缓存"></a>事务和提交后清理缓存</h1><h2 id="哪些操作需要放在同一个事务中"><a href="#哪些操作需要放在同一个事务中" class="headerlink" title="哪些操作需要放在同一个事务中"></a>哪些操作需要放在同一个事务中</h2><p>商品审核通过涉及创建商品、更新申请、插入审核记录，这些数据库操作应该一起成功或一起回滚。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Transactional</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">audit</span><span class="params">(<span class="type">long</span> id, ProductAuditRequest request, <span class="type">long</span> adminId)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> doAudit(id, request, adminId);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这是结构示例，<code>doAudit()</code> 表示具体业务处理，并不是要求项目新增这个方法。事务的几个重要规则：</p>
+<ul>
+<li>方法通过 Spring 代理调用时事务才会生效，不能指望同一对象内部调用一个带注解的方法就自动开启新事务。</li>
+<li>默认对 RuntimeException 和 Error 回滚；需要对受检异常回滚时可配置 <code>rollbackFor = Exception.class</code>。</li>
+<li><code>return Result.fail(...)</code> 是正常返回，不会因为 success 为 false 自动回滚。</li>
+<li>捕获异常后不再抛出，可能导致事务仍然提交。</li>
+<li>MySQL 事务不会自动撤销 OSS 复制或普通 Redis 写入。</li>
+</ul>
+<h2 id="提交成功后再清理缓存"><a href="#提交成功后再清理缓存" class="headerlink" title="提交成功后再清理缓存"></a>提交成功后再清理缓存</h2><p>如果数据库还没提交就删除缓存，另一个请求可能查到旧数据，又把旧数据写回缓存。项目商品上下架使用了提交后清理：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">TransactionSynchronizationManager.registerSynchronization(</span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">TransactionSynchronization</span>() &#123;</span><br><span class="line">            <span class="comment">/**</span></span><br><span class="line"><span class="comment">             * 数据库事务提交成功后清除商品详情缓存</span></span><br><span class="line"><span class="comment">             */</span></span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">afterCommit</span><span class="params">()</span> &#123;</span><br><span class="line">                productDetailService.invalidate(productId);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>需要在已经开启事务同步的上下文中注册，通常位于通过 Spring 调用的 <code>@Transactional</code> 方法里。这里依赖 <code>org.springframework.transaction.support</code> 下的两个类。</p>
+<p>这是处理缓存一致性的常用步骤，但不是绝对强一致：较早开始的查询仍可能在删除之后写回旧数据；提交后的缓存操作失败，也不能撤销已提交的数据库事务。必要时结合版本号、重试和短 TTL。</p>
+<h1 id="缓存键、空值和版本号"><a href="#缓存键、空值和版本号" class="headerlink" title="缓存键、空值和版本号"></a>缓存键、空值和版本号</h1><h2 id="缓存键必须包含影响查询结果的条件"><a href="#缓存键必须包含影响查询结果的条件" class="headerlink" title="缓存键必须包含影响查询结果的条件"></a>缓存键必须包含影响查询结果的条件</h2><p>用户收藏页不能只使用 <code>page:1</code>，否则不同用户会共用错误结果。雀跃使用类似：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> <span class="string">&quot;feed:product:myfavs:&quot;</span> + userId + <span class="string">&quot;:&quot;</span> + version</span><br><span class="line">        + <span class="string">&quot;:&quot;</span> + size + <span class="string">&quot;:&quot;</span> + page;</span><br></pre></td></tr></table></figure>
+
+<p>包含用户、收藏版本、分页大小和页码。用户新增或取消收藏后增加版本号，下次请求自然使用新键；旧页面并没有立即物理删除，而是等 TTL 到期。</p>
+<p>商品详情的商品变更版本与用户收藏版本用途不同。当前项目的商品变更版本只用于详情，不用于商品 Feed 和收藏页。</p>
+<h2 id="区分未命中和已确认的空结果"><a href="#区分未命中和已确认的空结果" class="headerlink" title="区分未命中和已确认的空结果"></a>区分未命中和已确认的空结果</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">String</span> <span class="variable">cached</span> <span class="operator">=</span> redis.opsForValue().get(key);</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (cached == <span class="literal">null</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> queryAndCache(id);</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">if</span> (cached.isEmpty()) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">return</span> objectMapper.readValue(cached, Shop.class);</span><br></pre></td></tr></table></figure>
+
+<p>这是空字符串作为空值标记的流程示例，<code>queryAndCache()</code> 表示查询并回填的业务方法。不存在的对象短暂缓存为空，可以避免重复查询数据库。Feed 空页也可以使用专用标记或空页面 DTO，但写入和读取必须遵守同一约定。</p>
+<h2 id="TTL-加随机偏移"><a href="#TTL-加随机偏移" class="headerlink" title="TTL 加随机偏移"></a>TTL 加随机偏移</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">Duration</span> <span class="variable">ttl</span> <span class="operator">=</span> Duration.ofSeconds(</span><br><span class="line">        <span class="number">30</span> + ThreadLocalRandom.current().nextInt(<span class="number">20</span>)</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>结果是 30～49 秒，不包含 50 秒。用于分散大量键同时过期的时刻。TTL 是允许数据最多陈旧多久的业务选择，不是越长越好。</p>
+<h1 id="并发回源与-Redis-锁"><a href="#并发回源与-Redis-锁" class="headerlink" title="并发回源与 Redis 锁"></a>并发回源与 Redis 锁</h1><h2 id="本地锁只保护当前进程"><a href="#本地锁只保护当前进程" class="headerlink" title="本地锁只保护当前进程"></a>本地锁只保护当前进程</h2><p>缓存未命中时，多个线程可能同时回源。同一个 key 的请求需要进入同一个锁，并在拿到锁后再次检查缓存。</p>
+<p><code>synchronized</code> 只对当前 JVM 有效，多实例部署时不能当作分布式锁。雀跃 Feed 当前使用动态锁 Map；商品详情使用固定锁数组。</p>
+<p>使用 <code>ConcurrentHashMap.computeIfAbsent()</code> 获得锁，并不意味着可以随意删除该锁。如果旧锁还有等待线程就移除，后来的请求可能创建新锁，出现同一个 key 两把锁同时工作的情况。这属于动态锁生命周期管理问题。</p>
+<h2 id="Redis-锁要使用令牌，避免误删别人的锁"><a href="#Redis-锁要使用令牌，避免误删别人的锁" class="headerlink" title="Redis 锁要使用令牌，避免误删别人的锁"></a>Redis 锁要使用令牌，避免误删别人的锁</h2><p>下面是学习用的改进写法，不代表项目所有锁已经采用了令牌释放。依赖 StringRedisTemplate、DefaultRedisScript、UUID、Duration 和 List：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 获取带过期时间的 Redis 锁并只释放自己持有的锁</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> lockKey</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@param</span> action</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">runWithLock</span><span class="params">(String lockKey, Runnable action)</span> &#123;</span><br><span class="line">    <span class="type">String</span> <span class="variable">token</span> <span class="operator">=</span> UUID.randomUUID().toString();</span><br><span class="line">    <span class="type">Boolean</span> <span class="variable">acquired</span> <span class="operator">=</span> redis.opsForValue().setIfAbsent(</span><br><span class="line">            lockKey, token, Duration.ofSeconds(<span class="number">10</span>)</span><br><span class="line">    );</span><br><span class="line">    <span class="keyword">if</span> (!Boolean.TRUE.equals(acquired)) &#123;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">IllegalStateException</span>(<span class="string">&quot;操作处理中，请稍后重试&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        action.run();</span><br><span class="line">    &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">        DefaultRedisScript&lt;Long&gt; unlock = <span class="keyword">new</span> <span class="title class_">DefaultRedisScript</span>&lt;&gt;();</span><br><span class="line">        unlock.setResultType(Long.class);</span><br><span class="line">        unlock.setScriptText(<span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">                if redis.call(&#x27;GET&#x27;, KEYS[1]) == ARGV[1] then</span></span><br><span class="line"><span class="string">                    return redis.call(&#x27;DEL&#x27;, KEYS[1])</span></span><br><span class="line"><span class="string">                end</span></span><br><span class="line"><span class="string">                return 0</span></span><br><span class="line"><span class="string">                &quot;&quot;&quot;</span>);</span><br><span class="line">        redis.execute(unlock, List.of(lockKey), token);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>锁的过期时间防止进程退出后永远不释放。令牌比较和删除必须在同一个 Lua 中完成，不能先 GET 再单独 DEL。未拿到锁时不要执行释放逻辑。</p>
+<p>这个示例仍要求临界区在租期内完成。超过 10 秒锁可能过期，新的持有者仍会进入；复杂长任务需要续租或成熟锁组件，关键数据库状态仍要条件更新保护。</p>
+<h1 id="分页和多查一条判断-hasMore"><a href="#分页和多查一条判断-hasMore" class="headerlink" title="分页和多查一条判断 hasMore"></a>分页和多查一条判断 hasMore</h1><p>雀跃的 Feed 使用多查一条判断下一页，不必为了 hasMore 每次执行 COUNT：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="variable">safePage</span> <span class="operator">=</span> Math.max(page, <span class="number">1</span>);</span><br><span class="line"><span class="type">int</span> <span class="variable">safeSize</span> <span class="operator">=</span> Math.min(Math.max(size, <span class="number">1</span>), <span class="number">50</span>);</span><br><span class="line"><span class="type">int</span> <span class="variable">offset</span> <span class="operator">=</span> Math.multiplyExact(safePage - <span class="number">1</span>, safeSize);</span><br><span class="line"></span><br><span class="line">List&lt;BlogFeedRow&gt; rows = blogMapper.selectHotFeed(safeSize + <span class="number">1</span>, offset);</span><br><span class="line"><span class="type">boolean</span> <span class="variable">hasMore</span> <span class="operator">=</span> rows.size() &gt; safeSize;</span><br><span class="line"><span class="keyword">if</span> (hasMore) &#123;</span><br><span class="line">    rows = rows.subList(<span class="number">0</span>, safeSize);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上面是通用分页示例，Mapper 名称和参数要按实际接口调整。<code>multiplyExact()</code> 会在整数乘法溢出时抛异常，接口层还应限制不合理的超大页码。</p>
+<p>排序字段要稳定，例如 <code>ORDER BY publish_time DESC, id DESC</code>，用 id 处理相同发布时间。它保证同一查询快照内排序明确，但 offset 分页仍可能受翻页期间新增、删除内容影响；连续滚动场景可以考虑时间加 ID 的游标分页。</p>
+<h1 id="参数校验、身份和权限"><a href="#参数校验、身份和权限" class="headerlink" title="参数校验、身份和权限"></a>参数校验、身份和权限</h1><h2 id="用-DTO-校验请求形状"><a href="#用-DTO-校验请求形状" class="headerlink" title="用 DTO 校验请求形状"></a>用 DTO 校验请求形状</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">record</span> <span class="title class_">CreateProductRequest</span><span class="params">(</span></span><br><span class="line"><span class="params">        @NotBlank @Size(max = 128)</span> String name,</span><br><span class="line">        <span class="meta">@NotNull</span> <span class="meta">@PositiveOrZero</span> Long price,</span><br><span class="line">        <span class="meta">@NotNull</span> <span class="meta">@PositiveOrZero</span> Integer stock</span><br><span class="line">) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里使用 <code>jakarta.validation.constraints</code> 中的注解。Controller 接收时加 <code>@Valid</code>：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> Result <span class="title function_">create</span><span class="params">(<span class="meta">@Valid</span> <span class="meta">@RequestBody</span> CreateProductRequest request,</span></span><br><span class="line"><span class="params">                     <span class="meta">@AuthenticationPrincipal</span> Jwt jwt)</span> &#123;</span><br><span class="line">    <span class="type">long</span> <span class="variable">userId</span> <span class="operator">=</span> Long.parseLong(jwt.getSubject());</span><br><span class="line">    <span class="keyword">return</span> productService.create(request, userId);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这是参数接收示例，路由注解和 service 方法按具体业务定义。<code>@NotNull</code> 不会检查字符串是不是空白；<code>@NotBlank</code> 用于字符串，<code>@PositiveOrZero</code> 用于非负数值。</p>
+<p>校验分两层：DTO 检查名称长度、金额范围等；业务层检查店铺归属、营业状态、申请状态。客户端传入的 userId 不能代替 JWT 中经过认证的用户身份。</p>
+<h2 id="登录、角色和资源归属不是同一件事"><a href="#登录、角色和资源归属不是同一件事" class="headerlink" title="登录、角色和资源归属不是同一件事"></a>登录、角色和资源归属不是同一件事</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@PreAuthorize(&quot;hasRole(&#x27;ADMIN&#x27;)&quot;)</span></span><br></pre></td></tr></table></figure>
+
+<p>用于角色权限，项目要启用方法安全。商家接口还需要核对 <code>shop.ownerUserId</code> 是否等于当前用户，不能因为用户有商家角色就允许操作其他商铺。</p>
+<p>审核图片时要使用申请人的 userId 验证归属，而不是管理员自己的 userId。</p>
+<h1 id="日志和异常处理"><a href="#日志和异常处理" class="headerlink" title="日志和异常处理"></a>日志和异常处理</h1><h2 id="使用占位符记录排查所需的信息"><a href="#使用占位符记录排查所需的信息" class="headerlink" title="使用占位符记录排查所需的信息"></a>使用占位符记录排查所需的信息</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">log.info(<span class="string">&quot;feed.myfavs source=redis user=&#123;&#125; page=&#123;&#125;&quot;</span>, userId, page);</span><br><span class="line">log.warn(<span class="string">&quot;收藏页缓存读取失败: key=&#123;&#125;&quot;</span>, key, exception);</span><br></pre></td></tr></table></figure>
+
+<p>末尾传入异常对象可以记录堆栈，便于找到原因。不要把密码、访问令牌、OSS 签名 URL 或密钥写入日志。</p>
+<p>性能问题需要分别记录数据库查询、Redis 调用和整个接口耗时，不能只凭页面动画判断后端耗时。测量时间间隔可以使用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">long</span> <span class="variable">started</span> <span class="operator">=</span> System.nanoTime();</span><br><span class="line"><span class="keyword">try</span> &#123;</span><br><span class="line">    performOperation();</span><br><span class="line">&#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">    <span class="type">long</span> <span class="variable">elapsedMs</span> <span class="operator">=</span> TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);</span><br><span class="line">    log.info(<span class="string">&quot;operation elapsedMs=&#123;&#125;&quot;</span>, elapsedMs);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>performOperation()</code> 表示被测业务方法。<code>nanoTime()</code> 适合计算经过的时长，不能当作日期时间戳保存。</p>
+<h2 id="缓存失败和业务失败分开处理"><a href="#缓存失败和业务失败分开处理" class="headerlink" title="缓存失败和业务失败分开处理"></a>缓存失败和业务失败分开处理</h2><p>读取缓存失败可以根据业务降级查数据库；数据库审核写入失败不能吞掉异常后继续返回成功。空 catch 会隐藏问题，至少应决定是记录并降级，还是向上抛出交给统一异常处理。</p>
+<p>优先掌握集合与 Map、时间金额格式化、JSON 类型转换、Redis 数据结构、SQL 条件更新和事务。读懂这些之后，再深入 Lua、Pipeline、缓存一致性和锁的生命周期，比较容易对应到雀跃的真实代码。</p>
+<h1 id="Spring-对象管理和依赖注入"><a href="#Spring-对象管理和依赖注入" class="headerlink" title="Spring 对象管理和依赖注入"></a>Spring 对象管理和依赖注入</h1><h2 id="Bean-是什么，为什么不用自己-new-Service"><a href="#Bean-是什么，为什么不用自己-new-Service" class="headerlink" title="Bean 是什么，为什么不用自己 new Service"></a>Bean 是什么，为什么不用自己 new Service</h2><p>Bean 就是交给 Spring 创建和管理的对象。项目里的 Service、Mapper、RedisTemplate、ObjectMapper 都通过 Spring 组合起来。</p>
+<table>
+<thead>
+<tr>
+<th>注解</th>
+<th>常见用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>@Component</code></td>
+<td>通用组件，例如工具型缓存客户端</td>
+</tr>
+<tr>
+<td><code>@Service</code></td>
+<td>业务服务</td>
+</tr>
+<tr>
+<td><code>@RestController</code></td>
+<td>接收请求并返回响应数据</td>
+</tr>
+<tr>
+<td><code>@Configuration</code></td>
+<td>声明配置类</td>
+</tr>
+<tr>
+<td><code>@Bean</code></td>
+<td>把方法返回的对象注册到 Spring</td>
+</tr>
+<tr>
+<td><code>@ConfigurationProperties</code></td>
+<td>把配置项绑定到有类型的 Java 对象</td>
+</tr>
+<tr>
+<td><code>@Qualifier</code></td>
+<td>多个同类 Bean 中指定使用哪一个</td>
+</tr>
+</tbody></table>
+<p>下面是构造器注入示例，我一般都是用构造器注入</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">BlogDetailServiceImpl</span> <span class="keyword">implements</span> <span class="title class_">BlogDetailService</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> BlogMapper blogMapper;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> CounterService counterService;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> BitmapStateReader bitmapStateReader;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> FollowStateService followStateService;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> OssStorageService ossStorageService;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> StringRedisTemplate redis;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ObjectMapper objectMapper;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Cache&lt;String, BlogDetailResponse&gt; localCache;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> ConcurrentHashMap&lt;String, Object&gt; singleFlight =</span><br><span class="line">            <span class="keyword">new</span> <span class="title class_">ConcurrentHashMap</span>&lt;&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="title function_">BlogDetailServiceImpl</span><span class="params">(</span></span><br><span class="line"><span class="params">            BlogMapper blogMapper,</span></span><br><span class="line"><span class="params">            CounterService counterService,</span></span><br><span class="line"><span class="params">            BitmapStateReader bitmapStateReader,</span></span><br><span class="line"><span class="params">            FollowStateService followStateService,</span></span><br><span class="line"><span class="params">            OssStorageService ossStorageService,</span></span><br><span class="line"><span class="params">            StringRedisTemplate redis,</span></span><br><span class="line"><span class="params">            ObjectMapper objectMapper,</span></span><br><span class="line"><span class="params">            <span class="meta">@Qualifier(&quot;blogDetailCache&quot;)</span></span></span><br><span class="line"><span class="params">            Cache&lt;String, BlogDetailResponse&gt; localCache)</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.blogMapper = blogMapper;</span><br><span class="line">        <span class="built_in">this</span>.counterService = counterService;</span><br><span class="line">        <span class="built_in">this</span>.bitmapStateReader = bitmapStateReader;</span><br><span class="line">        <span class="built_in">this</span>.followStateService = followStateService;</span><br><span class="line">        <span class="built_in">this</span>.ossStorageService = ossStorageService;</span><br><span class="line">        <span class="built_in">this</span>.redis = redis;</span><br><span class="line">        <span class="built_in">this</span>.objectMapper = objectMapper;</span><br><span class="line">        <span class="built_in">this</span>.localCache = localCache;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里需要项目里的 <code>Product</code>、<code>ProductMapper</code> 和 Spring 的 <code>Service</code> import。雀跃很多类使用 Lombok <code>@RequiredArgsConstructor</code> 自动生成 final 字段的构造器，也是同样的原理。</p>
+<p>手动 <code>new ProductReader(...)</code> 不会自动获得 Spring 事务、方法权限等代理功能。需要使用 Spring 管理的业务服务时，通过注入取得。</p>
+<p>项目有多个 Caffeine 缓存，构造器参数可以用下面的方式指定具体 Bean：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Qualifier(&quot;productPublicCache&quot;)</span></span><br><span class="line">Cache&lt;String, ProductFeedPageResponse&gt; publicCache</span><br></pre></td></tr></table></figure>
+
+<p>Spring Bean 默认是单例，并不代表自动线程安全。不要把当前请求的 userId、临时 List、查询 Wrapper 设置成类的成员字段；这些值通常应放在方法局部变量中。</p>
+<h2 id="配置默认值和运行环境"><a href="#配置默认值和运行环境" class="headerlink" title="配置默认值和运行环境"></a>配置默认值和运行环境</h2><p>配置文件可以从环境变量读取敏感信息，下面是示例写法：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">oss:</span></span><br><span class="line">  <span class="attr">access-key-id:</span> <span class="string">$&#123;OSS_ACCESS_KEY_ID&#125;</span></span><br><span class="line">  <span class="attr">access-key-secret:</span> <span class="string">$&#123;OSS_ACCESS_KEY_SECRET&#125;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>application-dev.yaml</code> 和 <code>application-prod.yaml</code> 可以区分运行环境，但名字本身不会自动启用某个环境，需要通过 <code>spring.profiles.active</code> 或启动参数选择。发布前确认应用实际连接的数据库和 Redis，而不是只检查本地配置文件。</p>
+<h1 id="空值判断、对象比较和集合边界"><a href="#空值判断、对象比较和集合边界" class="headerlink" title="空值判断、对象比较和集合边界"></a>空值判断、对象比较和集合边界</h1><h2 id="Long-和-Integer-不要用双等号比较两个包装对象"><a href="#Long-和-Integer-不要用双等号比较两个包装对象" class="headerlink" title="Long 和 Integer 不要用双等号比较两个包装对象"></a>Long 和 Integer 不要用双等号比较两个包装对象</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">Long</span> <span class="variable">ownerId</span> <span class="operator">=</span> shop.getOwnerUserId();</span><br><span class="line"><span class="type">boolean</span> <span class="variable">ownShop</span> <span class="operator">=</span> Objects.equals(ownerId, currentUserId);</span><br><span class="line"></span><br><span class="line"><span class="type">boolean</span> <span class="variable">published</span> <span class="operator">=</span> Integer.valueOf(<span class="number">1</span>).equals(product.getStatus());</span><br><span class="line"><span class="type">boolean</span> <span class="variable">acquired</span> <span class="operator">=</span> Boolean.TRUE.equals(lockResult);</span><br></pre></td></tr></table></figure>
+
+<p><code>Objects.equals()</code> 能处理 null。两个包装对象之间的 <code>==</code> 比较引用，小整数缓存可能让错误写法偶尔看起来正确；包装对象和基本类型比较又可能触发拆箱，null 会导致空指针异常。</p>
+<p>字符串比较常用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">boolean</span> <span class="variable">productScene</span> <span class="operator">=</span> <span class="string">&quot;product&quot;</span>.equals(scene);</span><br><span class="line"><span class="type">boolean</span> <span class="variable">missingName</span> <span class="operator">=</span> name == <span class="literal">null</span> || name.isBlank();</span><br></pre></td></tr></table></figure>
+
+<p><code>isEmpty()</code> 只检查长度为零，<code>isBlank()</code> 也识别空格等空白字符。项目里的 <code>StrUtil.isBlank()</code> 还能直接接收 null。</p>
+<h2 id="Map-默认值不等于自动处理-null"><a href="#Map-默认值不等于自动处理-null" class="headerlink" title="Map 默认值不等于自动处理 null"></a>Map 默认值不等于自动处理 null</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Map&lt;String, Long&gt; counts = <span class="keyword">new</span> <span class="title class_">HashMap</span>&lt;&gt;();</span><br><span class="line"><span class="type">long</span> <span class="variable">likes</span> <span class="operator">=</span> counts.getOrDefault(<span class="string">&quot;like&quot;</span>, <span class="number">0L</span>);</span><br></pre></td></tr></table></figure>
+
+<p>key 不存在时得到 0。但如果 Map 里明确保存了 <code>&quot;like&quot; → null</code>，<code>getOrDefault()</code> 会返回 null，赋给 long 时仍会空指针。接收允许 null 的数据时可以明确处理：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">Long</span> <span class="variable">storedCount</span> <span class="operator">=</span> counts.get(<span class="string">&quot;like&quot;</span>);</span><br><span class="line"><span class="type">long</span> <span class="variable">likes</span> <span class="operator">=</span> storedCount == <span class="literal">null</span> ? <span class="number">0L</span> : storedCount;</span><br></pre></td></tr></table></figure>
+
+<h2 id="不可变列表、浅拷贝和缓存对象"><a href="#不可变列表、浅拷贝和缓存对象" class="headerlink" title="不可变列表、浅拷贝和缓存对象"></a>不可变列表、浅拷贝和缓存对象</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">List&lt;Long&gt; fixed = List.of(<span class="number">8L</span>, <span class="number">3L</span>, <span class="number">10L</span>);</span><br><span class="line">List&lt;Long&gt; editable = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;(fixed);</span><br><span class="line">editable.add(<span class="number">12L</span>);</span><br></pre></td></tr></table></figure>
+
+<p><code>List.of()</code> 不允许 null，也不允许增删；<code>stream().toList()</code> 返回不可修改的列表，但可以包含 null。需要修改列表结构时创建 <code>ArrayList</code>。</p>
+<p><code>new ArrayList&lt;&gt;(rows)</code> 只复制列表结构，里面的 Blog 对象还是原来的对象。Java record 也只是字段引用不可重新赋值，不保证字段引用的 List 或对象内部不可变。</p>
+<p>本地缓存保存的是对象引用。读取公共缓存后，直接 <code>setFaved()</code> 写入某个用户的状态，可能影响其他请求。雀跃 Feed 的安全做法是根据基础字段创建响应对象，再填入本次用户状态，而不是修改共享缓存对象。</p>
+<h1 id="DTO-转换和返回字段控制"><a href="#DTO-转换和返回字段控制" class="headerlink" title="DTO 转换和返回字段控制"></a>DTO 转换和返回字段控制</h1><p>数据库实体负责映射表，Request DTO 负责接收输入，Response DTO 负责定义返回给前端的字段。不要因为实体已经查出来，就把所有字段原样返回。</p>
+<p>例如雀跃的 UserDTO 只暴露 id、昵称、头像和角色，可以明确转换：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">UserDTO</span> <span class="variable">dto</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">UserDTO</span>();</span><br><span class="line">dto.setId(user.getId());</span><br><span class="line">dto.setNickName(user.getNickName());</span><br><span class="line">dto.setIcon(user.getIcon());</span><br><span class="line">dto.setRole(user.getRole());</span><br></pre></td></tr></table></figure>
+
+<p>这种方式容易看清允许返回的字段。接收修改资料时同样只设置允许修改的字段，不能让客户端通过请求覆盖角色、店铺归属或审核状态。</p>
+<p>Spring 的属性复制工具也很常见：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">BeanUtils.copyProperties(source, target);</span><br></pre></td></tr></table></figure>
+
+<p>这里指 <code>org.springframework.beans.BeanUtils</code>，参数顺序是来源在前、目标在后。它主要复制名称和类型兼容的属性，不做深拷贝，也不是金额或时间格式转换工具；null 属性也可能覆盖目标值。权限敏感字段和复杂 DTO 更适合显式映射。</p>
+<h1 id="Controller-参数绑定和统一响应"><a href="#Controller-参数绑定和统一响应" class="headerlink" title="Controller 参数绑定和统一响应"></a>Controller 参数绑定和统一响应</h1><h2 id="三种常见的取参方式"><a href="#三种常见的取参方式" class="headerlink" title="三种常见的取参方式"></a>三种常见的取参方式</h2><table>
+<thead>
+<tr>
+<th>注解</th>
+<th>数据从哪里来</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>@PathVariable</code></td>
+<td>URL 路径</td>
+<td><code>/product/123</code> 中的 123</td>
+</tr>
+<tr>
+<td><code>@RequestParam</code></td>
+<td>查询参数等请求参数</td>
+<td><code>/product/feed?current=2</code></td>
+</tr>
+<tr>
+<td><code>@RequestBody</code></td>
+<td>请求体，常用于 JSON</td>
+<td>商品申请内容</td>
+</tr>
+</tbody></table>
+<p>示例方法签名：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> Result <span class="title function_">detail</span><span class="params">(<span class="meta">@PathVariable(&quot;id&quot;)</span> <span class="type">long</span> id)</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">feed</span><span class="params">(<span class="meta">@RequestParam(value = &quot;current&quot;, defaultValue = &quot;1&quot;)</span> <span class="type">int</span> current)</span></span><br><span class="line"><span class="keyword">public</span> Result <span class="title function_">apply</span><span class="params">(<span class="meta">@Valid</span> <span class="meta">@RequestBody</span> ProductApplyRequest request)</span></span><br></pre></td></tr></table></figure>
+
+<p>这些签名用来对比注解，并不是完整 Controller。Controller 还需要路由注解和具体方法体。JSON 请求体通过 Jackson 转换；路径和查询参数通过 Spring 的参数绑定转换。字段格式不正确可能在进入业务方法前就报错。</p>
+<h2 id="Result-和-HTTP-状态码是两层信息"><a href="#Result-和-HTTP-状态码是两层信息" class="headerlink" title="Result 和 HTTP 状态码是两层信息"></a>Result 和 HTTP 状态码是两层信息</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">return</span> Result.ok(data);</span><br><span class="line"><span class="keyword">return</span> Result.fail(<span class="string">&quot;申请不存在&quot;</span>);</span><br></pre></td></tr></table></figure>
+
+<p>雀跃前端会读取响应体里的 success 和 errorMsg。<code>Result.fail()</code> 本身只是 Java 返回值，不会自动设置 HTTP 400 或 500，也不会自动触发事务回滚。</p>
+<p>项目已有 <code>WebExceptionAdvice</code>，通过 <code>@RestControllerAdvice</code> 和 <code>@ExceptionHandler</code> 集中处理异常。例如参数校验异常从 <code>getBindingResult()</code> 提取字段错误，运行异常记录堆栈后返回通用提示。</p>
+<p>如果设计新接口并希望同时返回 HTTP 400，可以采用以下模式：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">return</span> ResponseEntity.badRequest().body(Result.fail(<span class="string">&quot;参数错误&quot;</span>));</span><br></pre></td></tr></table></figure>
+
+<p>此时方法返回类型应为 <code>ResponseEntity&lt;Result&gt;</code>，需要 <code>org.springframework.http.ResponseEntity</code>。修改老接口时要同步检查前端：当前 apiFetch 对多数非 2xx 响应先报通用错误，不会继续读取业务 JSON，所以不能只改后端状态码就认为错误消息会正常显示。</p>
+<p>安全过滤器中产生的认证失败，可能走 Spring Security 的入口处理器，而不是 ControllerAdvice。判断接口错误时同时检查 HTTP 状态和业务响应体。</p>
+<h1 id="MyBatis-Plus-查询与更新"><a href="#MyBatis-Plus-查询与更新" class="headerlink" title="MyBatis-Plus 查询与更新"></a>MyBatis-Plus 查询与更新</h1><h2 id="LambdaQueryWrapper-组合条件"><a href="#LambdaQueryWrapper-组合条件" class="headerlink" title="LambdaQueryWrapper 组合条件"></a>LambdaQueryWrapper 组合条件</h2><p>下面是管理员查询商品申请的常见写法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">LambdaQueryWrapper&lt;ProductApplication&gt; query = <span class="keyword">new</span> <span class="title class_">LambdaQueryWrapper</span>&lt;ProductApplication&gt;()</span><br><span class="line">        .eq(auditStatus != <span class="literal">null</span>, ProductApplication::getAuditStatus, auditStatus)</span><br><span class="line">        .orderByDesc(ProductApplication::getCreateTime)</span><br><span class="line">        .orderByDesc(ProductApplication::getId);</span><br><span class="line"></span><br><span class="line">Page&lt;ProductApplication&gt; result = applicationMapper.selectPage(</span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">Page</span>&lt;&gt;(safePage, safeSize), query</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line">List&lt;ProductApplication&gt; records = result.getRecords();</span><br><span class="line"><span class="type">long</span> <span class="variable">total</span> <span class="operator">=</span> result.getTotal();</span><br></pre></td></tr></table></figure>
+
+<p>需要 MyBatis-Plus 的 <code>LambdaQueryWrapper</code> 和分页 <code>Page</code>。safePage、safeSize 应先经过范围校验，分页拦截器也需要按项目方式配置。</p>
+<p><code>.eq(condition, column, value)</code> 的第一个参数决定是否添加条件。方法引用比手写列名更容易随重构检查。按创建时间和 id 排序，避免相同时间的记录顺序不明确。</p>
+<p><strong>可选筛选条件可以省略，但权限条件不能省略。</strong> 商家查询自己的申请时，applicantUserId 等归属条件应始终存在，不能因传入 null 就不加条件。</p>
+<h2 id="空-IN-列表先返回空结果"><a href="#空-IN-列表先返回空结果" class="headerlink" title="空 IN 列表先返回空结果"></a>空 IN 列表先返回空结果</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (ids == <span class="literal">null</span> || ids.isEmpty()) &#123;</span><br><span class="line">    <span class="keyword">return</span> List.of();</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">return</span> productMapper.selectBatchIds(ids);</span><br></pre></td></tr></table></figure>
+
+<p>这是返回 List<Product> 的方法体片段。不要用 <code>.in(!ids.isEmpty(), ...)</code> 来处理空 ID 列表后直接执行查询，因为条件被省略时可能查出不受限制的数据。自定义 XML 的 foreach 也应考虑空集合会不会产生无效 SQL。</p>
+<h2 id="精确更新字段，不回写整条旧记录"><a href="#精确更新字段，不回写整条旧记录" class="headerlink" title="精确更新字段，不回写整条旧记录"></a>精确更新字段，不回写整条旧记录</h2><p>例如在合法业务操作中清空申请拒绝原因，可以写：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">LambdaUpdateWrapper&lt;ProductApplication&gt; update = <span class="keyword">new</span> <span class="title class_">LambdaUpdateWrapper</span>&lt;ProductApplication&gt;()</span><br><span class="line">        .eq(ProductApplication::getId, id)</span><br><span class="line">        .eq(ProductApplication::getApplicantUserId, userId)</span><br><span class="line">        .eq(ProductApplication::getAuditStatus, <span class="number">2</span>)</span><br><span class="line">        .set(ProductApplication::getRejectReason, <span class="literal">null</span>);</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="variable">changed</span> <span class="operator">=</span> applicationMapper.update(<span class="literal">null</span>, update);</span><br></pre></td></tr></table></figure>
+
+<p>这是显式设置 null 的 API 示例，不代表单独清空原因就完成了重新申请。真正业务还要一起更新其他字段并验证影响行数。更新 Wrapper 使用 <code>com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper</code>。</p>
+<h2 id="批量查关联数据，避免-N-1-查询"><a href="#批量查关联数据，避免-N-1-查询" class="headerlink" title="批量查关联数据，避免 N+1 查询"></a>批量查关联数据，避免 N+1 查询</h2><p>展示 20 篇 Blog，如果每篇都单独查一次作者，就会产生一条列表 SQL 加 20 条作者 SQL。可以先提取并去重作者 ID，再批量查询，建立 Map 后组装；也可以像雀跃 Feed 那样通过 JOIN 一次取得所需字段。</p>
+<p>批量不等于一次查询任意多条，后台任务处理大量 ID 时应分批。JOIN 的表如果是一对多，也要检查是否把一条 Blog 扩展成多条结果，影响分页和计数。</p>
+<h1 id="数据库唯一约束、索引和表结构迁移"><a href="#数据库唯一约束、索引和表结构迁移" class="headerlink" title="数据库唯一约束、索引和表结构迁移"></a>数据库唯一约束、索引和表结构迁移</h1><h2 id="唯一约束是并发场景的最后一道保护"><a href="#唯一约束是并发场景的最后一道保护" class="headerlink" title="唯一约束是并发场景的最后一道保护"></a>唯一约束是并发场景的最后一道保护</h2><p>雀跃商品收藏表有：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">UNIQUE</span> KEY uk_product_favorite_user_product (user_id, product_id)</span><br></pre></td></tr></table></figure>
+
+<p>即使两个请求同时判断“没有收藏记录”，数据库也不允许插入两条相同用户和商品的关系。<code>state = 0</code> 表示取消时，下一次收藏应该恢复原记录，不能假设取消后唯一键就空出来了。</p>
+<p>Java 的先查后插、本地锁和 Redis 锁都不能替代数据库唯一约束。重复键异常应该按具体业务处理，不要把所有 SQL 错误都当作重复请求忽略。</p>
+<h2 id="索引要对应-WHERE-和-ORDER-BY"><a href="#索引要对应-WHERE-和-ORDER-BY" class="headerlink" title="索引要对应 WHERE 和 ORDER BY"></a>索引要对应 WHERE 和 ORDER BY</h2><p>商品收藏列表有这样的组合索引：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">KEY idx_product_favorite_user_state_time (user_id, state, update_time, id)</span><br></pre></td></tr></table></figure>
+
+<p>它对应按用户和有效状态筛选、按更新时间排序的查询：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">EXPLAIN</span><br><span class="line"><span class="keyword">SELECT</span> product_id</span><br><span class="line"><span class="keyword">FROM</span> tb_product_favorite</span><br><span class="line"><span class="keyword">WHERE</span> user_id <span class="operator">=</span> <span class="number">42</span> <span class="keyword">AND</span> state <span class="operator">=</span> <span class="number">1</span></span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> update_time <span class="keyword">DESC</span>, id <span class="keyword">DESC</span></span><br><span class="line">LIMIT <span class="number">20</span>;</span><br></pre></td></tr></table></figure>
+
+<p>通过 EXPLAIN 关注实际选择的 key、估算扫描行数 rows 和 Extra 中的排序情况。rows 是估算值；有索引也不代表优化器一定使用，更不代表没有额外回表。是否需要把 product_id 加入覆盖索引，要结合执行计划和写入成本决定。</p>
+<p>避免只凭“某列经常查询”就添加大量单列索引。组合索引的列顺序很重要，范围条件、排序、JOIN 条件都需要一起分析。<code>EXPLAIN ANALYZE</code> 会实际执行查询，使用前明确查询开销。</p>
+<h2 id="代码升级必须配合数据库升级"><a href="#代码升级必须配合数据库升级" class="headerlink" title="代码升级必须配合数据库升级"></a>代码升级必须配合数据库升级</h2><p>项目曾出现 <code>Unknown column &#39;p.favorites&#39;</code>，原因是查询代码已经使用新字段，实际数据库却没有应用对应迁移。</p>
+<p>雀跃的 <code>src/main/resources/db/V5__product_feed_favorite.sql</code> 包含新增计数字段、收藏表和索引的 SQL。检查时可以使用：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> DATABASE();</span><br><span class="line"><span class="keyword">SHOW</span> COLUMNS <span class="keyword">FROM</span> tb_product;</span><br><span class="line"><span class="keyword">SHOW</span> INDEX <span class="keyword">FROM</span> tb_product_favorite;</span><br></pre></td></tr></table></figure>
+
+<p>先确认当前连接的数据库，再对照迁移。<strong>文件名带 V5 不代表启动时一定自动执行</strong>，是否自动执行取决于是否配置了 Flyway 等迁移工具。已经成功执行的建表或加列脚本不能不检查就重复执行；环境升级要记录版本，避免本地和线上结构不一致。</p>
+<h1 id="文件流、路径和自动关闭资源"><a href="#文件流、路径和自动关闭资源" class="headerlink" title="文件流、路径和自动关闭资源"></a>文件流、路径和自动关闭资源</h1><h2 id="UTF-8-文件读写"><a href="#UTF-8-文件读写" class="headerlink" title="UTF-8 文件读写"></a>UTF-8 文件读写</h2><p>Java 17 常用写法：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">Path</span> <span class="variable">path</span> <span class="operator">=</span> Path.of(<span class="string">&quot;D:/queping/example.md&quot;</span>);</span><br><span class="line"><span class="type">String</span> <span class="variable">content</span> <span class="operator">=</span> Files.readString(path, StandardCharsets.UTF_8);</span><br></pre></td></tr></table></figure>
+
+<p>需要 <code>java.nio.file.Path</code>、<code>java.nio.file.Files</code> 和 <code>java.nio.charset.StandardCharsets</code>。读取大文件时不要全部放进内存，使用流逐步处理。</p>
+<p>文件写入要明确是覆盖、追加还是创建新文件。例如只允许新建：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">Files.writeString(path, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);</span><br></pre></td></tr></table></figure>
+
+<p>目标存在时会失败；不要在不知道目标用途时使用会覆盖原文件的默认写入方式。以上 API 会抛 IOException，需要捕获或由方法声明抛出。</p>
+<h2 id="try-with-resources-自动关闭流"><a href="#try-with-resources-自动关闭流" class="headerlink" title="try-with-resources 自动关闭流"></a>try-with-resources 自动关闭流</h2><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">try</span> (<span class="type">InputStream</span> <span class="variable">input</span> <span class="operator">=</span> Files.newInputStream(sourcePath);</span><br><span class="line">     <span class="type">OutputStream</span> <span class="variable">output</span> <span class="operator">=</span> Files.newOutputStream(targetPath, StandardOpenOption.CREATE_NEW)) &#123;</span><br><span class="line">    input.transferTo(output);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这是方法体片段，sourcePath 和 targetPath 是 Path。需要 <code>java.io.InputStream</code>、<code>java.io.OutputStream</code>、<code>java.nio.file.StandardOpenOption</code>。退出 try 时会关闭流，发生异常也会执行关闭，不用每个分支手动 close。</p>
+<p>用户提供文件名时，不能直接拼接进服务器目录。<code>resolve(...).normalize()</code> 后应检查结果仍位于允许目录中；文件系统存在符号链接时还要处理真实路径。OSS 对象键和本地文件路径是两种概念，不能混用路径校验方式。</p>
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/">后端开发</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/09/10/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/%E7%BA%BF%E7%A8%8B%E6%B1%A0%E5%B8%B8%E7%94%A8%E6%96%B9%E6%B3%95/" title="线程池和定时任务常用方法"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">线程池和定时任务常用方法</div></div><div class="info-2"><div class="info-item-1">线程池的常见用法线程池用来复用线程并限制并发。适合独立的后台任务、缓存预热和多个互不依赖的查询。它不会自动让数据库更快，也不会自动保证数据一致性。 第一步：创建由 Spring 管理的有界线程池1234567891011121314151617181920212223242526272829package com.specialweek.demo;import java.util.concurrent.ThreadPoolExecutor;import org.springframework.context.annotation.Bean;import org.springframework.context.annotation.Configuration;import org.springframework.scheduling.annotation.EnableAsync;import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;@Configuration@EnableAsyncpubli...</div></div></div></a><a class="pagination-related" href="/2026/09/04/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%95%86%E9%93%BA%E4%B8%8E%E5%95%86%E5%93%81%E7%94%B3%E8%AF%B7%E5%AE%A1%E6%A0%B8%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃商铺与商品申请审核前后端联调"><img class="cover" src="/./img/3.jpg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">雀跃商铺与商品申请审核前后端联调</div></div><div class="info-2"><div class="info-item-1">业务设计  商铺必须管理员审核； 商品必须管理员审核； 普通优惠券由已审核店铺的店主自主创建； 秒杀优惠券由已审核店铺的店主自主创建，不需要管理员审核； 用户申请商铺时只填写地址，不要求手动填写经纬度； 经度和纬度由管理员审核时补齐，审核通过后才写入正式 tb_shop； 商铺和商品申请数据先写入 MySQL 申请表，审核通过后才创建正式业务记录；普通券和秒杀券直接写入正式优惠券表。  统一返回格式统一使用 com.specialweek.common.web.Result： 123456public class Result &#123;    private Boolean success;    private String errorMsg;    private Object data;    private Long total;&#125;  成功示例： 123456&#123;  &quot;success&quot;: true,  &quot;errorMsg&quot;: null,  &quot;data&quot;: 101,  &quot;total&...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/09/10/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/%E7%BA%BF%E7%A8%8B%E6%B1%A0%E5%B8%B8%E7%94%A8%E6%96%B9%E6%B3%95/" title="线程池和定时任务常用方法"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-10</div><div class="info-item-2">线程池和定时任务常用方法</div></div><div class="info-2"><div class="info-item-1">线程池的常见用法线程池用来复用线程并限制并发。适合独立的后台任务、缓存预热和多个互不依赖的查询。它不会自动让数据库更快，也不会自动保证数据一致性。 第一步：创建由 Spring 管理的有界线程池1234567891011121314151617181920212223242526272829package com.specialweek.demo;import java.util.concurrent.ThreadPoolExecutor;import org.springframework.context.annotation.Bean;import org.springframework.context.annotation.Configuration;import org.springframework.scheduling.annotation.EnableAsync;import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;@Configuration@EnableAsyncpubli...</div></div></div></a><a class="pagination-related" href="/2026/09/11/%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91/OSS%E5%AF%B9%E8%B1%A1%E5%AD%98%E5%82%A8%E7%AE%80%E5%8D%95%E5%AE%9E%E7%8E%B0/" title="OSS对象存储简单实现"><img class="cover" src="/./img/3.jpg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-09-11</div><div class="info-item-2">OSS对象存储简单实现</div></div><div class="info-2"><div class="info-item-1">OSS 图片上传使用教程1配置 OSS → 后端生成上传签名 → 前端直接上传图片 → 保存对象键 → 获取图片访问地址  文件内容从浏览器直接传给 OSS，应用后端负责授权、归属检查和数据库记录。    字段 含义 是否长期保存    objectKey Bucket 内的对象键，如 images&#x2F;10001&#x2F;20260918&#x2F;UUID.jpg 保存到数据库   putUrl 带签名的临时 PUT 上传地址 不保存   publicUrl 公开域名与对象键组成的读取地址 按需生成   GET 签名地址 私有对象的限时读取地址 不保存，过期后重新生成   对象键是桶内的文件名，斜杠用来组织前缀，并不代表本地磁盘目录。保存对象键可以让应用更容易切换 CDN 或公开访问域名；迁移到另一个桶时仍需实际迁移文件。 下面提供独立示例，使用 Spring Boot 3、Java 17、MySQL 和阿里云 OSS。每个 public 类放入同名 Java 文件，统一放在 src&#x2F;main&#x2F;java&#x2F;com&#x2F;example&...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/./img/auart.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">specialweek4</div><div class="author-info-description">specialweek4的博客,记录我的学习和生活点滴</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">72</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">23</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">16</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/specialweek4"><i class="fab fa-github"></i><span>关注我</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/specialweek4" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:504957307@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">❀Specialweek Blog❀ 记录我的学习和生活，分享我喜欢的东西。🎸🎶❀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91%E6%88%91%E5%B8%B8%E7%94%A8%E7%9A%84%E6%96%B9%E6%B3%95"><span class="toc-number">1.</span> <span class="toc-text">后端开发我常用的方法</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E6%9C%AC%E5%9C%B0%E7%BC%93%E5%AD%98"><span class="toc-number">2.</span> <span class="toc-text">使用本地缓存</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%BA%8F%E5%88%97%E5%8C%96%E5%92%8C%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96"><span class="toc-number">3.</span> <span class="toc-text">序列化和反序列化</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AF%B9%E8%B1%A1%E8%BD%ACJson"><span class="toc-number">3.1.</span> <span class="toc-text">对象转Json</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%A1%E6%95%B0%E4%BA%8C%E8%BF%9B%E5%88%B6%E5%AD%98%E5%82%A8"><span class="toc-number">3.2.</span> <span class="toc-text">计数二进制存储</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%97%B6%E9%97%B4"><span class="toc-number">4.</span> <span class="toc-text">时间</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E9%9B%86%E5%90%88%E5%A4%84%E7%90%86%E5%92%8C%E6%8C%89%E6%8C%87%E5%AE%9A%E9%A1%BA%E5%BA%8F%E9%87%8D%E6%8E%92"><span class="toc-number">5.</span> <span class="toc-text">集合处理和按指定顺序重排</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E6%89%B9%E9%87%8F%E6%9F%A5%E8%AF%A2%E5%90%8E%E6%81%A2%E5%A4%8D%E6%94%B6%E8%97%8F%E9%A1%BA%E5%BA%8F"><span class="toc-number">5.1.</span> <span class="toc-text">数据库批量查询后恢复收藏顺序</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8E%BB%E9%87%8D%E3%80%81%E8%BD%AC%E6%8D%A2%E5%92%8C%E5%88%86%E7%BB%84"><span class="toc-number">5.2.</span> <span class="toc-text">去重、转换和分组</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E3%80%81%E9%87%91%E9%A2%9D%E5%92%8C%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%A0%BC%E5%BC%8F%E5%8C%96"><span class="toc-number">6.</span> <span class="toc-text">时间、金额和字符串格式化</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E8%BD%AC%E5%AD%97%E7%AC%A6%E4%B8%B2%E5%92%8C%E5%AD%97%E7%AC%A6%E4%B8%B2%E8%BD%AC%E6%97%B6%E9%97%B4"><span class="toc-number">6.1.</span> <span class="toc-text">时间转字符串和字符串转时间</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E6%88%B3%E5%92%8C%E6%97%B6%E5%8C%BA"><span class="toc-number">6.2.</span> <span class="toc-text">时间戳和时区</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%87%91%E9%A2%9D%E5%88%86%E5%92%8C%E5%85%83%E7%9A%84%E8%BD%AC%E6%8D%A2"><span class="toc-number">6.3.</span> <span class="toc-text">金额分和元的转换</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AD%97%E7%AC%A6%E4%B8%B2%E6%A8%A1%E6%9D%BF%E5%92%8C%E5%88%86%E9%9A%94"><span class="toc-number">6.4.</span> <span class="toc-text">字符串模板和分隔</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%B3%9B%E5%9E%8B%E9%9B%86%E5%90%88%E7%9A%84%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96"><span class="toc-number">7.</span> <span class="toc-text">泛型集合的反序列化</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Redis-%E5%B8%B8%E7%94%A8%E6%93%8D%E4%BD%9C"><span class="toc-number">8.</span> <span class="toc-text">Redis 常用操作</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#String%E3%80%81Hash%E3%80%81List-%E5%92%8C-Set"><span class="toc-number">8.1.</span> <span class="toc-text">String、Hash、List 和 Set</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%B9%E9%87%8F%E8%8E%B7%E5%8F%96%EF%BC%8C%E5%87%8F%E5%B0%91%E4%B8%80%E6%AC%A1%E4%B8%80%E6%AC%A1%E8%AF%B7%E6%B1%82-Redis"><span class="toc-number">8.2.</span> <span class="toc-text">批量获取，减少一次一次请求 Redis</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Bitmap-%E4%BF%9D%E5%AD%98%E7%94%A8%E6%88%B7%E7%8A%B6%E6%80%81"><span class="toc-number">8.3.</span> <span class="toc-text">Bitmap 保存用户状态</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Lua-%E5%8E%9F%E5%AD%90%E5%88%A4%E6%96%AD%E5%92%8C%E5%B9%82%E7%AD%89"><span class="toc-number">9.</span> <span class="toc-text">Lua 原子判断和幂等</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E6%9D%A1%E4%BB%B6%E6%9B%B4%E6%96%B0%E5%92%8C%E9%81%BF%E5%85%8D%E6%97%A7%E5%AF%B9%E8%B1%A1%E8%A6%86%E7%9B%96"><span class="toc-number">10.</span> <span class="toc-text">数据库条件更新和避免旧对象覆盖</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E5%BD%B1%E5%93%8D%E8%A1%8C%E6%95%B0"><span class="toc-number">10.1.</span> <span class="toc-text">检查影响行数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8D%E8%A6%81%E5%9C%A8%E6%9D%A1%E4%BB%B6%E6%9B%B4%E6%96%B0%E5%90%8E%E5%9B%9E%E5%86%99%E6%97%A7%E5%AF%B9%E8%B1%A1"><span class="toc-number">10.2.</span> <span class="toc-text">不要在条件更新后回写旧对象</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E4%BA%8B%E5%8A%A1%E5%92%8C%E6%8F%90%E4%BA%A4%E5%90%8E%E6%B8%85%E7%90%86%E7%BC%93%E5%AD%98"><span class="toc-number">11.</span> <span class="toc-text">事务和提交后清理缓存</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%93%AA%E4%BA%9B%E6%93%8D%E4%BD%9C%E9%9C%80%E8%A6%81%E6%94%BE%E5%9C%A8%E5%90%8C%E4%B8%80%E4%B8%AA%E4%BA%8B%E5%8A%A1%E4%B8%AD"><span class="toc-number">11.1.</span> <span class="toc-text">哪些操作需要放在同一个事务中</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%8F%90%E4%BA%A4%E6%88%90%E5%8A%9F%E5%90%8E%E5%86%8D%E6%B8%85%E7%90%86%E7%BC%93%E5%AD%98"><span class="toc-number">11.2.</span> <span class="toc-text">提交成功后再清理缓存</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E9%94%AE%E3%80%81%E7%A9%BA%E5%80%BC%E5%92%8C%E7%89%88%E6%9C%AC%E5%8F%B7"><span class="toc-number">12.</span> <span class="toc-text">缓存键、空值和版本号</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E9%94%AE%E5%BF%85%E9%A1%BB%E5%8C%85%E5%90%AB%E5%BD%B1%E5%93%8D%E6%9F%A5%E8%AF%A2%E7%BB%93%E6%9E%9C%E7%9A%84%E6%9D%A1%E4%BB%B6"><span class="toc-number">12.1.</span> <span class="toc-text">缓存键必须包含影响查询结果的条件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8C%BA%E5%88%86%E6%9C%AA%E5%91%BD%E4%B8%AD%E5%92%8C%E5%B7%B2%E7%A1%AE%E8%AE%A4%E7%9A%84%E7%A9%BA%E7%BB%93%E6%9E%9C"><span class="toc-number">12.2.</span> <span class="toc-text">区分未命中和已确认的空结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TTL-%E5%8A%A0%E9%9A%8F%E6%9C%BA%E5%81%8F%E7%A7%BB"><span class="toc-number">12.3.</span> <span class="toc-text">TTL 加随机偏移</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%B9%B6%E5%8F%91%E5%9B%9E%E6%BA%90%E4%B8%8E-Redis-%E9%94%81"><span class="toc-number">13.</span> <span class="toc-text">并发回源与 Redis 锁</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%AC%E5%9C%B0%E9%94%81%E5%8F%AA%E4%BF%9D%E6%8A%A4%E5%BD%93%E5%89%8D%E8%BF%9B%E7%A8%8B"><span class="toc-number">13.1.</span> <span class="toc-text">本地锁只保护当前进程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Redis-%E9%94%81%E8%A6%81%E4%BD%BF%E7%94%A8%E4%BB%A4%E7%89%8C%EF%BC%8C%E9%81%BF%E5%85%8D%E8%AF%AF%E5%88%A0%E5%88%AB%E4%BA%BA%E7%9A%84%E9%94%81"><span class="toc-number">13.2.</span> <span class="toc-text">Redis 锁要使用令牌，避免误删别人的锁</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%88%86%E9%A1%B5%E5%92%8C%E5%A4%9A%E6%9F%A5%E4%B8%80%E6%9D%A1%E5%88%A4%E6%96%AD-hasMore"><span class="toc-number">14.</span> <span class="toc-text">分页和多查一条判断 hasMore</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%8F%82%E6%95%B0%E6%A0%A1%E9%AA%8C%E3%80%81%E8%BA%AB%E4%BB%BD%E5%92%8C%E6%9D%83%E9%99%90"><span class="toc-number">15.</span> <span class="toc-text">参数校验、身份和权限</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%94%A8-DTO-%E6%A0%A1%E9%AA%8C%E8%AF%B7%E6%B1%82%E5%BD%A2%E7%8A%B6"><span class="toc-number">15.1.</span> <span class="toc-text">用 DTO 校验请求形状</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%99%BB%E5%BD%95%E3%80%81%E8%A7%92%E8%89%B2%E5%92%8C%E8%B5%84%E6%BA%90%E5%BD%92%E5%B1%9E%E4%B8%8D%E6%98%AF%E5%90%8C%E4%B8%80%E4%BB%B6%E4%BA%8B"><span class="toc-number">15.2.</span> <span class="toc-text">登录、角色和资源归属不是同一件事</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E5%92%8C%E5%BC%82%E5%B8%B8%E5%A4%84%E7%90%86"><span class="toc-number">16.</span> <span class="toc-text">日志和异常处理</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%8D%A0%E4%BD%8D%E7%AC%A6%E8%AE%B0%E5%BD%95%E6%8E%92%E6%9F%A5%E6%89%80%E9%9C%80%E7%9A%84%E4%BF%A1%E6%81%AF"><span class="toc-number">16.1.</span> <span class="toc-text">使用占位符记录排查所需的信息</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E5%A4%B1%E8%B4%A5%E5%92%8C%E4%B8%9A%E5%8A%A1%E5%A4%B1%E8%B4%A5%E5%88%86%E5%BC%80%E5%A4%84%E7%90%86"><span class="toc-number">16.2.</span> <span class="toc-text">缓存失败和业务失败分开处理</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Spring-%E5%AF%B9%E8%B1%A1%E7%AE%A1%E7%90%86%E5%92%8C%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5"><span class="toc-number">17.</span> <span class="toc-text">Spring 对象管理和依赖注入</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Bean-%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E7%94%A8%E8%87%AA%E5%B7%B1-new-Service"><span class="toc-number">17.1.</span> <span class="toc-text">Bean 是什么，为什么不用自己 new Service</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E9%BB%98%E8%AE%A4%E5%80%BC%E5%92%8C%E8%BF%90%E8%A1%8C%E7%8E%AF%E5%A2%83"><span class="toc-number">17.2.</span> <span class="toc-text">配置默认值和运行环境</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%A9%BA%E5%80%BC%E5%88%A4%E6%96%AD%E3%80%81%E5%AF%B9%E8%B1%A1%E6%AF%94%E8%BE%83%E5%92%8C%E9%9B%86%E5%90%88%E8%BE%B9%E7%95%8C"><span class="toc-number">18.</span> <span class="toc-text">空值判断、对象比较和集合边界</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Long-%E5%92%8C-Integer-%E4%B8%8D%E8%A6%81%E7%94%A8%E5%8F%8C%E7%AD%89%E5%8F%B7%E6%AF%94%E8%BE%83%E4%B8%A4%E4%B8%AA%E5%8C%85%E8%A3%85%E5%AF%B9%E8%B1%A1"><span class="toc-number">18.1.</span> <span class="toc-text">Long 和 Integer 不要用双等号比较两个包装对象</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Map-%E9%BB%98%E8%AE%A4%E5%80%BC%E4%B8%8D%E7%AD%89%E4%BA%8E%E8%87%AA%E5%8A%A8%E5%A4%84%E7%90%86-null"><span class="toc-number">18.2.</span> <span class="toc-text">Map 默认值不等于自动处理 null</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8D%E5%8F%AF%E5%8F%98%E5%88%97%E8%A1%A8%E3%80%81%E6%B5%85%E6%8B%B7%E8%B4%9D%E5%92%8C%E7%BC%93%E5%AD%98%E5%AF%B9%E8%B1%A1"><span class="toc-number">18.3.</span> <span class="toc-text">不可变列表、浅拷贝和缓存对象</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#DTO-%E8%BD%AC%E6%8D%A2%E5%92%8C%E8%BF%94%E5%9B%9E%E5%AD%97%E6%AE%B5%E6%8E%A7%E5%88%B6"><span class="toc-number">19.</span> <span class="toc-text">DTO 转换和返回字段控制</span></a></li><li class="toc-item toc-level-1"><a class="toc-link" href="#Controller-%E5%8F%82%E6%95%B0%E7%BB%91%E5%AE%9A%E5%92%8C%E7%BB%9F%E4%B8%80%E5%93%8D%E5%BA%94"><span class="toc-number">20.</span> <span class="toc-text">Controller 参数绑定和统一响应</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E7%A7%8D%E5%B8%B8%E8%A7%81%E7%9A%84%E5%8F%96%E5%8F%82%E6%96%B9%E5%BC%8F"><span class="toc-number">20.1.</span> <span class="toc-text">三种常见的取参方式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Result-%E5%92%8C-HTTP-%E7%8A%B6%E6%80%81%E7%A0%81%E6%98%AF%E4%B8%A4%E5%B1%82%E4%BF%A1%E6%81%AF"><span class="toc-number">20.2.</span> <span class="toc-text">Result 和 HTTP 状态码是两层信息</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#MyBatis-Plus-%E6%9F%A5%E8%AF%A2%E4%B8%8E%E6%9B%B4%E6%96%B0"><span class="toc-number">21.</span> <span class="toc-text">MyBatis-Plus 查询与更新</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#LambdaQueryWrapper-%E7%BB%84%E5%90%88%E6%9D%A1%E4%BB%B6"><span class="toc-number">21.1.</span> <span class="toc-text">LambdaQueryWrapper 组合条件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%A9%BA-IN-%E5%88%97%E8%A1%A8%E5%85%88%E8%BF%94%E5%9B%9E%E7%A9%BA%E7%BB%93%E6%9E%9C"><span class="toc-number">21.2.</span> <span class="toc-text">空 IN 列表先返回空结果</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B2%BE%E7%A1%AE%E6%9B%B4%E6%96%B0%E5%AD%97%E6%AE%B5%EF%BC%8C%E4%B8%8D%E5%9B%9E%E5%86%99%E6%95%B4%E6%9D%A1%E6%97%A7%E8%AE%B0%E5%BD%95"><span class="toc-number">21.3.</span> <span class="toc-text">精确更新字段，不回写整条旧记录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%B9%E9%87%8F%E6%9F%A5%E5%85%B3%E8%81%94%E6%95%B0%E6%8D%AE%EF%BC%8C%E9%81%BF%E5%85%8D-N-1-%E6%9F%A5%E8%AF%A2"><span class="toc-number">21.4.</span> <span class="toc-text">批量查关联数据，避免 N+1 查询</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E5%94%AF%E4%B8%80%E7%BA%A6%E6%9D%9F%E3%80%81%E7%B4%A2%E5%BC%95%E5%92%8C%E8%A1%A8%E7%BB%93%E6%9E%84%E8%BF%81%E7%A7%BB"><span class="toc-number">22.</span> <span class="toc-text">数据库唯一约束、索引和表结构迁移</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%94%AF%E4%B8%80%E7%BA%A6%E6%9D%9F%E6%98%AF%E5%B9%B6%E5%8F%91%E5%9C%BA%E6%99%AF%E7%9A%84%E6%9C%80%E5%90%8E%E4%B8%80%E9%81%93%E4%BF%9D%E6%8A%A4"><span class="toc-number">22.1.</span> <span class="toc-text">唯一约束是并发场景的最后一道保护</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%B4%A2%E5%BC%95%E8%A6%81%E5%AF%B9%E5%BA%94-WHERE-%E5%92%8C-ORDER-BY"><span class="toc-number">22.2.</span> <span class="toc-text">索引要对应 WHERE 和 ORDER BY</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E5%8D%87%E7%BA%A7%E5%BF%85%E9%A1%BB%E9%85%8D%E5%90%88%E6%95%B0%E6%8D%AE%E5%BA%93%E5%8D%87%E7%BA%A7"><span class="toc-number">22.3.</span> <span class="toc-text">代码升级必须配合数据库升级</span></a></li></ol></li><li class="toc-item toc-level-1"><a class="toc-link" href="#%E6%96%87%E4%BB%B6%E6%B5%81%E3%80%81%E8%B7%AF%E5%BE%84%E5%92%8C%E8%87%AA%E5%8A%A8%E5%85%B3%E9%97%AD%E8%B5%84%E6%BA%90"><span class="toc-number">23.</span> <span class="toc-text">文件流、路径和自动关闭资源</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#UTF-8-%E6%96%87%E4%BB%B6%E8%AF%BB%E5%86%99"><span class="toc-number">23.1.</span> <span class="toc-text">UTF-8 文件读写</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#try-with-resources-%E8%87%AA%E5%8A%A8%E5%85%B3%E9%97%AD%E6%B5%81"><span class="toc-number">23.2.</span> <span class="toc-text">try-with-resources 自动关闭流</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/09/18/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%95%86%E5%93%81%E6%94%B6%E8%97%8F%E4%B8%8E%E6%88%91%E7%9A%84%E5%95%86%E5%93%81%E6%94%B6%E8%97%8F%E5%90%8E%E7%AB%AF%E8%90%BD%E5%9C%B0%E8%AF%B4%E6%98%8E/" title="雀探商品 Feed、详情缓存与商品收藏后端实现"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀探商品 Feed、详情缓存与商品收藏后端实现"/></a><div class="content"><a class="title" href="/2026/09/18/local/%E9%9B%80%E6%8E%A2%E5%95%86%E5%93%81Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%95%86%E5%93%81%E6%94%B6%E8%97%8F%E4%B8%8E%E6%88%91%E7%9A%84%E5%95%86%E5%93%81%E6%94%B6%E8%97%8F%E5%90%8E%E7%AB%AF%E8%90%BD%E5%9C%B0%E8%AF%B4%E6%98%8E/" title="雀探商品 Feed、详情缓存与商品收藏后端实现">雀探商品 Feed、详情缓存与商品收藏后端实现</a><time datetime="2026-09-18T12:00:00.000Z" title="发表于 2026-09-18 20:00:00">2026-09-18</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/18/local/%E9%9B%80%E8%B7%83%E5%8D%9A%E5%AE%A2%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%BA%93%E6%A3%80%E6%9F%A5%E7%82%B9%E6%94%B9/" title="雀跃博客 Feed 缓存、反向索引与数据库检查点"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃博客 Feed 缓存、反向索引与数据库检查点"/></a><div class="content"><a class="title" href="/2026/09/18/local/%E9%9B%80%E8%B7%83%E5%8D%9A%E5%AE%A2%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%BA%93%E6%A3%80%E6%9F%A5%E7%82%B9%E6%94%B9/" title="雀跃博客 Feed 缓存、反向索引与数据库检查点">雀跃博客 Feed 缓存、反向索引与数据库检查点</a><time datetime="2026-09-18T12:00:00.000Z" title="发表于 2026-09-18 20:00:00">2026-09-18</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/17/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃Feed三级缓存、反向索引与我的收藏前后端联调"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃Feed三级缓存、反向索引与我的收藏前后端联调"/></a><div class="content"><a class="title" href="/2026/09/17/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%89%8D%E5%90%8E%E7%AB%AF%E8%81%94%E8%B0%83/" title="雀跃Feed三级缓存、反向索引与我的收藏前后端联调">雀跃Feed三级缓存、反向索引与我的收藏前后端联调</a><time datetime="2026-09-17T03:00:00.000Z" title="发表于 2026-09-17 11:00:00">2026-09-17</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/17/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1/" title="雀跃Feed三级缓存、反向索引与我的收藏后端代码设计"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃Feed三级缓存、反向索引与我的收藏后端代码设计"/></a><div class="content"><a class="title" href="/2026/09/17/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83Feed%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98%E5%8F%8D%E5%90%91%E7%B4%A2%E5%BC%95%E4%B8%8E%E6%88%91%E7%9A%84%E6%94%B6%E8%97%8F%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1/" title="雀跃Feed三级缓存、反向索引与我的收藏后端代码设计">雀跃Feed三级缓存、反向索引与我的收藏后端代码设计</a><time datetime="2026-09-17T02:00:00.000Z" title="发表于 2026-09-17 10:00:00">2026-09-17</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%85%B3%E6%B3%A8%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃关注模块后端代码设计与讲解"><img src="/./img/3.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="雀跃关注模块后端代码设计与讲解"/></a><div class="content"><a class="title" href="/2026/09/12/%E9%9B%80%E8%B7%83/%E9%9B%80%E8%B7%83%E5%85%B3%E6%B3%A8%E6%A8%A1%E5%9D%97%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%AE%B2%E8%A7%A3/" title="雀跃关注模块后端代码设计与讲解">雀跃关注模块后端代码设计与讲解</a><time datetime="2026-09-12T04:00:00.000Z" title="发表于 2026-09-12 12:00:00">2026-09-12</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/./img/3.jpg);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2026 By specialweek4</span></div><div class="footer_custom_text">❀写下我想说的话，听我想听的歌。🎸🎶❀</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.4"></script><script src="/js/main.js?v=5.5.4"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@6.1.9/dist/fancybox/fancybox.umd.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script></div><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><i class="fas fa-spinner fa-pulse" id="loading-status" hidden="hidden"></i><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="local-search-input"><input placeholder="搜索文章" type="text"/></div><hr/><div id="local-search-results"></div><div class="ais-Pagination" id="local-search-pagination" style="display:none;"><ul class="ais-Pagination-list"></ul></div><div id="local-search-stats"></div></div><div id="search-mask"></div><script src="/js/search/local-search.js?v=5.5.4"></script></div></div></body></html>
